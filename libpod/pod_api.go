@@ -542,6 +542,9 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		infraConfig.CPUQuota = p.CPUQuota()
 		infraConfig.CPUSetCPUs = p.ResourceLim().CPU.Cpus
 
+		if p.config.InfraContainer.ResourceLimits != nil {
+			infraConfig.CPUSetCPUs = p.config.InfraContainer.ResourceLimits.CPU.Cpus
+		}
 		if len(p.config.InfraContainer.DNSServer) > 0 {
 			infraConfig.DNSServer = make([]string, 0, len(p.config.InfraContainer.DNSServer))
 			infraConfig.DNSServer = append(infraConfig.DNSServer, p.config.InfraContainer.DNSServer...)
