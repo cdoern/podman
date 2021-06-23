@@ -38,6 +38,17 @@ Examples of the List Format:
 0-4,9           # bits 0, 1, 2, 3, 4, and 9 set
 0-2,7,12-14     # bits 0, 1, 2, 7, 12, 13, and 14 set
 
+#### **--cpuset-mems**=*amount*
+
+Limit the Memory Nodes to support execution. First Nodes is numbered 0. Takes a list of numbers similar to --cpuset-cpus
+
+Format is 0-3,0,1
+
+Examples of the List Format:
+
+0-4,9           # bits 0, 1, 2, 3, 4, and 9 set
+0-2,7,12-14     # bits 0, 1, 2, 7, 12, 13, and 14 set
+
 
 #### **--dns**=*ipaddr*
 

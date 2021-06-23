@@ -62,6 +62,9 @@ func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime) ([]libpod
 	if p.ResourceLimits != nil && p.ResourceLimits.CPU != nil && p.ResourceLimits.CPU.Cpus != "" {
 		options = append(options, libpod.WithPodCPUSetCPUs(p.ResourceLimits.CPU.Cpus))
 	}
+	if p.ResourceLimits != nil && p.ResourceLimits.CPU != nil && p.ResourceLimits.CPU.Mems != "" {
+		options = append(options, libpod.WithPodCPUSetMems(p.ResourceLimits.CPU.Mems))
+	}
 	if len(p.Hostname) > 0 {
 		options = append(options, libpod.WithPodHostname(p.Hostname))
 	}

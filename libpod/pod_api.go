@@ -541,10 +541,8 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		infraConfig.CPUPeriod = p.CPUPeriod()
 		infraConfig.CPUQuota = p.CPUQuota()
 		infraConfig.CPUSetCPUs = p.ResourceLim().CPU.Cpus
+		infraConfig.CPUSetMems = p.ResourceLim().CPU.Mems
 
-		if p.config.InfraContainer.ResourceLimits != nil {
-			infraConfig.CPUSetCPUs = p.config.InfraContainer.ResourceLimits.CPU.Cpus
-		}
 		if len(p.config.InfraContainer.DNSServer) > 0 {
 			infraConfig.DNSServer = make([]string, 0, len(p.config.InfraContainer.DNSServer))
 			infraConfig.DNSServer = append(infraConfig.DNSServer, p.config.InfraContainer.DNSServer...)
@@ -588,6 +586,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		NumContainers:    uint(len(containers)),
 		Containers:       ctrs,
 		CPUSetCPUs:       p.ResourceLim().CPU.Cpus,
+		CPUSetMems:       p.ResourceLim().CPU.Mems,
 		CPUPeriod:        p.CPUPeriod(),
 		CPUQuota:         p.CPUQuota(),
 	}

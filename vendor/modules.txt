@@ -93,7 +93,7 @@ github.com/containers/buildah/pkg/overlay
 github.com/containers/buildah/pkg/parse
 github.com/containers/buildah/pkg/rusage
 github.com/containers/buildah/util
-# github.com/containers/common v0.40.2-0.20210623133759-d13a31743aec
+# github.com/containers/common v0.40.2-0.20210623133759-d13a31743aec => github.com/cdoern/common v0.38.5-0.20210625135547-461c96ad5952
 github.com/containers/common/libimage
 github.com/containers/common/libimage/manifests
 github.com/containers/common/pkg/apparmor

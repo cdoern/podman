@@ -2397,3 +2397,20 @@ func WithPodCPUSetCPUs(inp string) PodCreateOption {
 		return nil
 	}
 }
+
+// WithPodCPUSetMems computes and sets the MEms linux resource string which determines the amount of memory nodes, from those available,  we are allowed to execute on
+func WithPodCPUSetMems(inp string) PodCreateOption {
+	return func(pod *Pod) error {
+		if pod.valid {
+			return define.ErrPodFinalized
+		}
+		if pod.ResourceLim().CPU.Period != nil {
+			pod.config.InfraContainer.ResourceLimits.CPU.Mems = inp
+		} else {
+			pod.config.InfraContainer.ResourceLimits = &specs.LinuxResources{}
+			pod.config.InfraContainer.ResourceLimits.CPU = &specs.LinuxCPU{}
+			pod.config.InfraContainer.ResourceLimits.CPU.Mems = inp
+		}
+		return nil
+	}
+}

@@ -120,6 +120,7 @@ type PodCreateOptions struct {
 	Share              []string
 	Cpus               float64
 	CpusetCpus         string
+	CpusetMems         string
 }
 
 type PodCreateReport struct {
@@ -138,6 +139,10 @@ func (p *PodCreateOptions) CPULimits() *specs.LinuxCPU {
 	}
 	if p.CpusetCpus != "" {
 		cpu.Cpus = p.CpusetCpus
+		hasLimits = true
+	}
+	if p.CpusetMems != "" {
+		cpu.Mems = p.CpusetMems
 		hasLimits = true
 	}
 	if !hasLimits {

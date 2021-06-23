@@ -57,6 +57,8 @@ type InspectPodData struct {
 	CPUQuota int64 `json:"cpu_quota,omitempty"`
 	// CPUSetCPUs contains linux specific CPU data for the pod
 	CPUSetCPUs string `json:"cpuset_cpus,omitempty"`
+	// CPUSetMems contains linuc specific Memory Node data for the pod
+	CPUSetMems string `json:"cpuset_mems,omitempty"`
 }
 
 // InspectPodInfraConfig contains the configuration of the pod's infra
@@ -103,6 +105,8 @@ type InspectPodInfraConfig struct {
 	CPUQuota int64 `json:"cpu_quota,omitempty"`
 	// CPUSetCPUs contains linux specific CPU data for the container
 	CPUSetCPUs string `json:"cpuset_cpus,omitempty"`
+	// CPUSetMems contains linuc specific Memory Node data for the pod
+	CPUSetMems string `json:"cpuset_mems,omitempty"`
 }
 
 // InspectPodContainerInfo contains information on a container in a pod.

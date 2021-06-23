@@ -64,6 +64,10 @@ func init() {
 	flags.StringVar(&createOptions.CpusetCpus, cpusetflagName, "", "CPUs in which to allow execution")
 	_ = createCommand.RegisterFlagCompletionFunc(cpusetflagName, completion.AutocompleteDefault)
 
+	cpusetMflagName := "cpuset-mems"
+	flags.StringVar(&createOptions.CpusetMems, cpusetMflagName, "", "Memory nodes in which to allow execution")
+	_ = createCommand.RegisterFlagCompletionFunc(cpusetMflagName, completion.AutocompleteDefault)
+
 	cpusflagName := "cpus"
 	flags.Float64Var(&createOptions.Cpus, cpusflagName, 0.000, "set amount of CPUs for the pod")
 	_ = createCommand.RegisterFlagCompletionFunc(cpusflagName, completion.AutocompleteDefault)
@@ -238,6 +242,40 @@ func create(cmd *cobra.Command, args []string) error {
 			copy = "" + strconv.Itoa(core)
 		}
 	}
+	numM := sysinfo.NUMANodeCount()
+	if numM == 0 {
+		createOptions.CpusetMems = ""
+	} else {
+		ret, err = parsers.ParseUintList(createOptions.CpusetMems) // PARSE AND SORT GIVEN MEM NODES
+		copy = ""
+		if err != nil {
+			errors.Wrapf(err, "could not parse list")
+		}
+		var valsM []int
+		for ind, val := range ret {
+			if val {
+				valsM = append(valsM, ind)
+			}
+		}
+		sort.Ints(valsM)
+		for ind, mem := range valsM {
+			if mem > numM { // if any  entry in given mem nodes is > last entry in sorted available mem nodes array then we have a problem...
+				if copy == "" {
+					copy = "0-" + strconv.Itoa(numM)
+					createOptions.CpusetMems = copy
+					break
+				} else {
+					createOptions.CpusetMems = copy
+					break
+				}
+			} else if ind != 0 {
+				copy += "," + strconv.Itoa(mem)
+			} else {
+				copy = "" + strconv.Itoa(mem)
+			}
+		}
+	}
+
 	response, err := registry.ContainerEngine().PodCreate(context.Background(), createOptions)
 	if err != nil {
 		return err

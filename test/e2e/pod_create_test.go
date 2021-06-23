@@ -559,4 +559,29 @@ ENTRYPOINT ["sleep","99999"]
 		podJSON := podInspect.InspectPodToJSON()
 		Expect(podJSON.CPUSetCPUs).To(Equal(in))
 	})
+
+	It("podman pod create --cpuset-mems", func() {
+		podName := "testPod"
+		ctrName := "testCtr"
+		M := sysinfo.NUMANodeCount()
+		numMems := ""
+		if M != 0 {
+			numMems = "" + strconv.Itoa(M)
+		} else {
+			numMems = ""
+		}
+		podCreate := podmanTest.Podman([]string{"pod", "create", "--cpuset-mems", numMems, "--name", podName})
+		podCreate.WaitWithDefaultTimeout()
+		Expect(podCreate.ExitCode()).To(Equal(0))
+
+		contCreate := podmanTest.Podman([]string{"container", "create", "--name", ctrName, "--pod", podName, "alpine"})
+		contCreate.WaitWithDefaultTimeout()
+		Expect(podCreate.ExitCode()).To(Equal(0))
+
+		podInspect := podmanTest.Podman([]string{"pod", "inspect", podName})
+		podInspect.WaitWithDefaultTimeout()
+		Expect(podInspect.ExitCode()).To(Equal(0))
+		podJSON := podInspect.InspectPodToJSON()
+		Expect(podJSON.CPUSetMems).To(Equal(numMems))
+	})
 })

@@ -140,16 +140,8 @@ func (p *Pod) ResourceLim() *specs.LinuxResources {
 	if resCopy != nil && resCopy.CPU != nil {
 		return resCopy
 	}
-<<<<<<< HEAD
 	empty := &specs.LinuxResources{
 		CPU: &specs.LinuxCPU{},
-=======
-	pe := uint64(0)
-	q := int64(0)
-	c := ""
-	empty := &specs.LinuxResources{
-		CPU: &specs.LinuxCPU{Period: &pe, Quota: &q, Cpus: c},
->>>>>>> 823b10373 (Podman Pod Create --cpus and --cpuset-cpus flags)
 	}
 	return empty
 }
