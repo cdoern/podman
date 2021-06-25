@@ -64,6 +64,10 @@ func init() {
 	flags.StringVar(&createOptions.CpusetCpus, cpusetflagName, "", "CPUs in which to allow execution")
 	_ = createCommand.RegisterFlagCompletionFunc(cpusetflagName, completion.AutocompleteDefault)
 
+	blkIOWtflagName := "blkio-weight"
+	flags.StringVar(&createOptions.BlkIOWeight, blkIOWtflagName, "", "Value between 100 and 1000 which determines the cgroup's share of block I/O")
+	_ = createCommand.RegisterFlagCompletionFunc(cpusetflagName, completion.AutocompleteDefault)
+
 	cpusflagName := "cpus"
 	flags.Float64Var(&createOptions.Cpus, cpusflagName, 0.000, "set amount of CPUs for the pod")
 	_ = createCommand.RegisterFlagCompletionFunc(cpusflagName, completion.AutocompleteDefault)
@@ -195,6 +199,19 @@ func create(cmd *cobra.Command, args []string) error {
 	if replace {
 		if err := replacePod(createOptions.Name); err != nil {
 			return err
+		}
+	}
+
+	if createOptions.BlkIOWeight != "" {
+		blkNum, err := strconv.Atoi(createOptions.BlkIOWeight)
+		if err != nil {
+			errors.Wrapf(err, "could not parse a number from given BlkIO Weight")
+			createOptions.BlkIOWeight = ""
+		} else {
+			if blkNum < 100 || blkNum > 100 {
+				errors.Wrapf(errors.New("invaid number"), "number given needs to be above 100 and below 100")
+				createOptions.BlkIOWeight = ""
+			}
 		}
 	}
 

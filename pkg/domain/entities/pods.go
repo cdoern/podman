@@ -120,6 +120,7 @@ type PodCreateOptions struct {
 	Share              []string
 	Cpus               float64
 	CpusetCpus         string
+	BlkIOWeight        string
 }
 
 type PodCreateReport struct {
