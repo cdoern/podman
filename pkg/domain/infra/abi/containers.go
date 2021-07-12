@@ -39,11 +39,21 @@ import (
 // is specified.  It also returns a list of the corresponding input name used to lookup each container.
 func getContainersAndInputByContext(all, latest bool, names []string, runtime *libpod.Runtime) (ctrs []*libpod.Container, rawInput []string, err error) {
 	var ctr *libpod.Container
+	pods := []*libpod.Pod{}
 	ctrs = []*libpod.Container{}
 
 	switch {
 	case all:
 		ctrs, err = runtime.GetAllContainers()
+		pods, err = runtime.GetAllPods()
+		for _, pod := range pods {
+			infra, e := pod.InfraContainer()
+			if e != nil {
+				err = e
+			}
+			ctrs = append(ctrs, infra)
+		}
+
 	case latest:
 		ctr, err = runtime.GetLatestContainer()
 		if err == nil {
