@@ -248,12 +248,8 @@ func (ic *ContainerEngine) prunePodHelper(ctx context.Context) ([]*entities.PodP
 	return reports, nil
 }
 
-func (ic *ContainerEngine) PodCreate(ctx context.Context, opts entities.PodCreateOptions) (*entities.PodCreateReport, error) {
-	podSpec := specgen.NewPodSpecGenerator()
-	if err := opts.ToPodSpecGen(podSpec); err != nil {
-		return nil, err
-	}
-	pod, err := generate.MakePod(podSpec, ic.Libpod)
+func (ic *ContainerEngine) PodCreate(ctx context.Context, specg specgen.PodSpecGenerator, opts *entities.PodCreateOptions) (*entities.PodCreateReport, error) {
+	pod, err := generate.MakePod(&specg, ic.Libpod)
 	if err != nil {
 		return nil, err
 	}

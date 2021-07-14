@@ -40,7 +40,7 @@ func (s *SpecGenerator) Validate() error {
 
 	// Containers being added to a pod cannot have certain network attributes
 	// associated with them because those should be on the infra container.
-	if len(s.Pod) > 0 && s.NetNS.NSMode == FromPod {
+	if len(s.Pod) > 0 && s.NetNS.NSMode == FromPod && !s.IsInfra {
 		if s.StaticIP != nil || s.StaticIPv6 != nil {
 			return errors.Wrap(define.ErrNetworkOnPodContainer, "static ip addresses must be defined when the pod is created")
 		}
@@ -63,7 +63,7 @@ func (s *SpecGenerator) Validate() error {
 		return errors.Wrap(ErrInvalidSpecConfig, "both image and rootfs cannot be simultaneously")
 	}
 	// Cannot set hostname and utsns
-	if len(s.ContainerBasicConfig.Hostname) > 0 && !s.ContainerBasicConfig.UtsNS.IsPrivate() {
+	if len(s.ContainerBasicConfig.Hostname) > 0 && !s.ContainerBasicConfig.UtsNS.IsPrivate() && !s.IsInfra {
 		if s.ContainerBasicConfig.UtsNS.IsPod() {
 			return errors.Wrap(ErrInvalidSpecConfig, "cannot set hostname when joining the pod UTS namespace")
 		}

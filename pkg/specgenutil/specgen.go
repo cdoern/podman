@@ -1,7 +1,9 @@
-package common
+package specgenutil
 
 import (
+	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -9,19 +11,24 @@ import (
 
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/podman/v3/cmd/podman/parse"
+	"github.com/containers/podman/v3/libpod"
 	"github.com/containers/podman/v3/libpod/define"
 	ann "github.com/containers/podman/v3/pkg/annotations"
+	"github.com/containers/podman/v3/pkg/domain/entities"
 	envLib "github.com/containers/podman/v3/pkg/env"
 	ns "github.com/containers/podman/v3/pkg/namespaces"
+	"github.com/containers/podman/v3/pkg/rootless"
 	"github.com/containers/podman/v3/pkg/specgen"
+	"github.com/containers/podman/v3/pkg/specgen/generate"
 	systemdDefine "github.com/containers/podman/v3/pkg/systemd/define"
 	"github.com/containers/podman/v3/pkg/util"
 	"github.com/docker/go-units"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
-func getCPULimits(c *ContainerCLIOpts) *specs.LinuxCPU {
+func getCPULimits(c *entities.ContainerCLIOpts) *specs.LinuxCPU {
 	cpu := &specs.LinuxCPU{}
 	hasLimits := false
 
@@ -67,7 +74,7 @@ func getCPULimits(c *ContainerCLIOpts) *specs.LinuxCPU {
 	return cpu
 }
 
-func getIOLimits(s *specgen.SpecGenerator, c *ContainerCLIOpts) (*specs.LinuxBlockIO, error) {
+func getIOLimits(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts) (*specs.LinuxBlockIO, error) {
 	var err error
 	io := &specs.LinuxBlockIO{}
 	hasLimits := false
@@ -122,7 +129,7 @@ func getIOLimits(s *specgen.SpecGenerator, c *ContainerCLIOpts) (*specs.LinuxBlo
 	return io, nil
 }
 
-func getMemoryLimits(s *specgen.SpecGenerator, c *ContainerCLIOpts) (*specs.LinuxMemory, error) {
+func getMemoryLimits(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts) (*specs.LinuxMemory, error) {
 	var err error
 	memory := &specs.LinuxMemory{}
 	hasLimits := false
@@ -182,7 +189,7 @@ func getMemoryLimits(s *specgen.SpecGenerator, c *ContainerCLIOpts) (*specs.Linu
 	return memory, nil
 }
 
-func setNamespaces(s *specgen.SpecGenerator, c *ContainerCLIOpts) error {
+func setNamespaces(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts) error {
 	var err error
 
 	if c.PID != "" {
@@ -222,18 +229,22 @@ func setNamespaces(s *specgen.SpecGenerator, c *ContainerCLIOpts) error {
 	return nil
 }
 
-func FillOutSpecGen(s *specgen.SpecGenerator, c *ContainerCLIOpts, args []string) error {
+func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts, args []string) error {
 	var (
 		err error
 	)
-
 	// validate flags as needed
-	if err := c.validate(); err != nil {
+	if err := validate(c); err != nil {
 		return err
 	}
-
 	s.User = c.User
-	inputCommand := args[1:]
+	var inputCommand []string
+	if !c.IsInfra {
+		if len(args) > 1 {
+			inputCommand = args[1:]
+		}
+	}
+
 	if len(c.HealthCmd) > 0 {
 		if c.NoHealthCheck {
 			return errors.New("Cannot specify both --no-healthcheck and --health-cmd")
@@ -267,7 +278,9 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *ContainerCLIOpts, args []string
 	}
 	// We are not handling the Expose flag yet.
 	// s.PortsExpose = c.Expose
-	s.PortMappings = c.Net.PublishPorts
+	if c.Net != nil { //&& len(s.PortMappings) == 0 {
+		s.PortMappings = c.Net.PublishPorts
+	}
 	s.PublishExposedPorts = c.PublishAll
 	s.Pod = c.Pod
 
@@ -380,7 +393,9 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *ContainerCLIOpts, args []string
 	}
 
 	// Include the command used to create the container.
-	s.ContainerCreateCommand = os.Args
+	if !s.IsInfra {
+		s.ContainerCreateCommand = os.Args
+	}
 
 	if len(inputCommand) > 0 {
 		s.Command = inputCommand
@@ -394,28 +409,34 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *ContainerCLIOpts, args []string
 		}
 		s.ShmSize = &shmSize
 	}
-	s.CNINetworks = c.Net.CNINetworks
 
-	// Network aliases
-	if len(c.Net.Aliases) > 0 {
-		// build a map of aliases where key=cniName
-		aliases := make(map[string][]string, len(s.CNINetworks))
-		for _, cniNetwork := range s.CNINetworks {
-			aliases[cniNetwork] = c.Net.Aliases
-		}
-		s.Aliases = aliases
+	if c.Net != nil {
+		s.CNINetworks = c.Net.CNINetworks
 	}
 
-	s.HostAdd = c.Net.AddHosts
-	s.UseImageResolvConf = c.Net.UseImageResolvConf
-	s.DNSServers = c.Net.DNSServers
-	s.DNSSearch = c.Net.DNSSearch
-	s.DNSOptions = c.Net.DNSOptions
-	s.StaticIP = c.Net.StaticIP
-	s.StaticMAC = c.Net.StaticMAC
-	s.NetworkOptions = c.Net.NetworkOptions
-	s.UseImageHosts = c.Net.NoHosts
+	// Network aliases
+	if c.Net != nil {
+		if len(c.Net.Aliases) > 0 {
+			// build a map of aliases where key=cniName
+			aliases := make(map[string][]string, len(s.CNINetworks))
+			for _, cniNetwork := range s.CNINetworks {
+				aliases[cniNetwork] = c.Net.Aliases
+			}
+			s.Aliases = aliases
+		}
+	}
 
+	if c.Net != nil {
+		s.HostAdd = c.Net.AddHosts
+		s.UseImageResolvConf = c.Net.UseImageResolvConf
+		s.DNSServers = c.Net.DNSServers
+		s.DNSSearch = c.Net.DNSSearch
+		s.DNSOptions = c.Net.DNSOptions
+		s.StaticIP = c.Net.StaticIP
+		s.StaticMAC = c.Net.StaticMAC
+		s.NetworkOptions = c.Net.NetworkOptions
+		s.UseImageHosts = c.Net.NoHosts
+	}
 	s.ImageVolumeMode = c.ImageVolume
 	if s.ImageVolumeMode == "bind" {
 		s.ImageVolumeMode = "anonymous"
@@ -765,6 +786,93 @@ func parseWeightDevices(s *specgen.SpecGenerator, weightDevs []string) error {
 		}
 	}
 	return nil
+}
+
+// MapSpec modifies the already filled Infra specgenerator,
+// replacing necessary values with those specified in pod creation
+func MapSpec(p *specgen.PodSpecGenerator) (*specgen.SpecGenerator, error) {
+	switch p.NetNS.NSMode {
+	case specgen.Default, "":
+		if p.NoInfra {
+			logrus.Debugf("No networking because the infra container is missing")
+			break
+		}
+		if rootless.IsRootless() {
+			logrus.Debugf("Pod will use slirp4netns")
+			libpod.WithPodSlirp4netns(p.NetworkOptions, p.InfraContainerSpec)
+		} else {
+			logrus.Debugf("Pod using bridge network mode")
+		}
+	case specgen.Bridge:
+		p.InfraContainerSpec.NetNS.NSMode = specgen.Bridge
+		logrus.Debugf("Pod using bridge network mode")
+	case specgen.Host:
+		logrus.Debugf("Pod will use host networking")
+		libpod.WithPodHostNetwork(p.InfraContainerSpec)
+	case specgen.Slirp:
+		logrus.Debugf("Pod will use slirp4netns")
+		libpod.WithPodSlirp4netns(p.NetworkOptions, p.InfraContainerSpec)
+	case specgen.NoNetwork:
+		logrus.Debugf("Pod will not use networking")
+		libpod.WithPodNoNetwork(p.InfraContainerSpec)
+	default:
+		return nil, errors.Errorf("pods presently do not support network mode %s", p.NetNS.NSMode)
+	}
+	if len(p.PortMappings) > 0 {
+		ports, _, _, err := generate.ParsePortMapping(p.PortMappings)
+		if err != nil {
+			return nil, err
+		}
+		p.InfraContainerSpec.PortMappings = libpod.WithInfraContainerPorts(ports, p.InfraContainerSpec)
+	}
+	libpod.WithPodCgroups()
+	if len(p.InfraCommand) > 0 {
+		p.InfraContainerSpec.Entrypoint = p.InfraCommand
+	}
+
+	if len(p.HostAdd) > 0 {
+		p.InfraContainerSpec.HostAdd = p.HostAdd
+	}
+	if len(p.DNSServer) > 0 {
+		var dnsServers []net.IP
+		dnsServers = append(dnsServers, p.DNSServer...)
+
+		p.InfraContainerSpec.DNSServers = dnsServers
+	}
+	if len(p.DNSOption) > 0 {
+		p.InfraContainerSpec.DNSOptions = p.DNSOption
+	}
+	if len(p.DNSSearch) > 0 {
+		p.InfraContainerSpec.DNSSearch = p.DNSSearch
+	}
+	if p.StaticIP != nil {
+		p.InfraContainerSpec.StaticIP = p.StaticIP
+	}
+	if p.StaticMAC != nil {
+		p.InfraContainerSpec.StaticMAC = p.StaticMAC
+	}
+	if p.NoManageResolvConf {
+		p.InfraContainerSpec.UseImageResolvConf = true
+	}
+	if len(p.CNINetworks) > 0 {
+		p.InfraContainerSpec.CNINetworks = p.CNINetworks
+	}
+	if p.NoManageHosts {
+		p.InfraContainerSpec.UseImageHosts = p.NoManageHosts
+	}
+
+	if len(p.InfraConmonPidFile) > 0 {
+		p.InfraContainerSpec.ConmonPidFile = p.InfraConmonPidFile
+	}
+
+	if p.InfraImage != "k8s.gcr.io/pause:3.5" {
+		p.InfraContainerSpec.Image = p.InfraImage
+	}
+
+	//if len(p.InfraContainerSpec.ConmonPidFile) > 0 {
+	//	libpod.WithInfraConmonPidFile(p.InfraContainerSpec.ConmonPidFile, p.InfraContainerSpec)
+	//}
+	return p.InfraContainerSpec, nil
 }
 
 func parseThrottleBPSDevices(bpsDevices []string) (map[string]specs.LinuxThrottleDevice, error) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/containers/podman/v3/pkg/specgen"
 	"github.com/containers/podman/v3/pkg/specgen/generate"
 	"github.com/containers/podman/v3/pkg/specgen/generate/kube"
+	"github.com/containers/podman/v3/pkg/specgenutil"
 	"github.com/containers/podman/v3/pkg/util"
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
@@ -177,10 +179,12 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 	}
 
-	p, err := kube.ToPodGen(ctx, podName, podYAML)
+	podOpt := entities.PodCreateOptions{Infra: true, NetFlags: &entities.NetFlags{}, Net: &entities.NetOptions{StaticIP: &net.IP{}, StaticMAC: &net.HardwareAddr{}}}
+	podOpt, err = kube.ToPodOpt(ctx, podName, podOpt, podYAML)
 	if err != nil {
 		return nil, err
 	}
+
 	if options.Network != "" {
 		ns, cniNets, netOpts, err := specgen.ParseNetworkString(options.Network)
 		if err != nil {
@@ -191,42 +195,41 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 			return nil, errors.Errorf("invalid value passed to --network: bridge or host networking must be configured in YAML")
 		}
 		logrus.Debugf("Pod %q joining CNI networks: %v", podName, cniNets)
-		p.NetNS.NSMode = specgen.Bridge
-		p.CNINetworks = append(p.CNINetworks, cniNets...)
+		podOpt.Net.Network.NSMode = specgen.Bridge
+		//	p.NetNS.NSMode = specgen.Bridge
+		podOpt.Net.CNINetworks = append(podOpt.Net.CNINetworks, cniNets...)
+		//p.CNINetworks = append(p.CNINetworks, cniNets...)
 		if len(netOpts) > 0 {
-			p.NetworkOptions = netOpts
+			podOpt.Net.NetworkOptions = netOpts
+			//p.NetworkOptions = netOpts
 		}
 	}
 
 	if len(options.StaticIPs) > *ipIndex {
-		p.StaticIP = &options.StaticIPs[*ipIndex]
+		//	p.StaticIP = &options.StaticIPs[*ipIndex]
+		podOpt.Net.StaticIP = &options.StaticIPs[*ipIndex]
 	} else if len(options.StaticIPs) > 0 {
 		// only warn if the user has set at least one ip
 		logrus.Warn("No more static ips left using a random one")
 	}
 	if len(options.StaticMACs) > *ipIndex {
-		p.StaticMAC = &options.StaticMACs[*ipIndex]
+		//	p.StaticMAC = &options.StaticMACs[*ipIndex]
+		podOpt.Net.StaticMAC = &options.StaticMACs[*ipIndex]
 	} else if len(options.StaticIPs) > 0 {
 		// only warn if the user has set at least one mac
 		logrus.Warn("No more static macs left using a random one")
 	}
 	*ipIndex++
 
-	// Create the Pod
-	pod, err := generate.MakePod(p, ic.Libpod)
+	p := specgen.NewPodSpecGenerator()
 	if err != nil {
 		return nil, err
 	}
 
-	podInfraID, err := pod.InfraContainerID()
+	p, err = entities.ToPodSpecGen(*p, &podOpt)
 	if err != nil {
 		return nil, err
 	}
-
-	if !options.Quiet {
-		writer = os.Stderr
-	}
-
 	volumes, err := kube.InitializeVolumes(podYAML.Spec.Volumes)
 	if err != nil {
 		return nil, err
@@ -265,26 +268,13 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		configMaps = append(configMaps, cm)
 	}
 
-	containers := make([]*libpod.Container, 0, len(podYAML.Spec.Containers))
-	for _, container := range podYAML.Spec.Containers {
-		// Contains all labels obtained from kube
-		labels := make(map[string]string)
-
-		// NOTE: set the pull policy to "newer".  This will cover cases
-		// where the "latest" tag requires a pull and will also
-		// transparently handle "localhost/" prefixed files which *may*
-		// refer to a locally built image OR an image running a
-		// registry on localhost.
-		pullPolicy := config.PullPolicyNewer
-		if len(container.ImagePullPolicy) > 0 {
-			// Make sure to lower the strings since K8s pull policy
-			// may be capitalized (see bugzilla.redhat.com/show_bug.cgi?id=1985905).
-			rawPolicy := string(container.ImagePullPolicy)
-			pullPolicy, err = config.ParsePullPolicy(strings.ToLower(rawPolicy))
-			if err != nil {
-				return nil, err
-			}
+	if podOpt.Infra {
+		imagePull := "k8s.gcr.io/pause:3.5"
+		if podOpt.InfraImage != "k8s.gcr.io/pause:3.5" && podOpt.InfraImage != "" {
+			imagePull = podOpt.InfraImage
 		}
+		infraOptions := entities.ContainerCLIOpts{ImageVolume: "bind"}
+		pullPolicy := config.PullPolicyNewer
 		// This ensures the image is the image store
 		pullOptions := &libimage.PullOptions{}
 		pullOptions.AuthFilePath = options.Authfile
@@ -295,52 +285,120 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		pullOptions.Password = options.Password
 		pullOptions.InsecureSkipTLSVerify = options.SkipTLSVerify
 
-		pulledImages, err := ic.Libpod.LibimageRuntime().Pull(ctx, container.Image, pullPolicy, pullOptions)
+		pulledImages, err := ic.Libpod.LibimageRuntime().Pull(ctx, imagePull, pullPolicy, pullOptions)
 		if err != nil {
 			return nil, err
 		}
+		p.InfraImage = pulledImages[0].Names()[0]
+		p.NoInfra = false
+		p.InfraContainerSpec = specgen.NewSpecGenerator(pulledImages[0].Names()[0], false)
+		p.InfraContainerSpec.NetworkOptions = p.NetworkOptions
+		p.InfraContainerSpec.IsInfra = true
 
-		// Handle kube annotations
-		for k, v := range annotations {
-			switch k {
-			// Auto update annotation without container name will apply to
-			// all containers within the pod
-			case autoupdate.Label, autoupdate.AuthfileLabel:
-				labels[k] = v
-			// Auto update annotation with container name will apply only
-			// to the specified container
-			case fmt.Sprintf("%s/%s", autoupdate.Label, container.Name),
-				fmt.Sprintf("%s/%s", autoupdate.AuthfileLabel, container.Name):
-				prefixAndCtr := strings.Split(k, "/")
-				labels[prefixAndCtr[0]] = v
+		err = specgenutil.FillOutSpecGen(p.InfraContainerSpec, &infraOptions, []string{})
+		if err != nil {
+			return nil, err
+		}
+		p.InfraContainerSpec.IsInfra = true
+		p.InfraContainerSpec, err = specgenutil.MapSpec(p)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create the Pod
+	pod, err := generate.MakePod(p, ic.Libpod)
+	if err != nil {
+		return nil, err
+	}
+
+	podInfraID, err := pod.InfraContainerID()
+	if err != nil {
+		return nil, err
+	}
+
+	if !options.Quiet {
+		writer = os.Stderr
+	}
+
+	containers := make([]*libpod.Container, 0, len(podYAML.Spec.Containers))
+	for _, container := range podYAML.Spec.Containers {
+		if !strings.Contains("infra", container.Name) {
+			// Contains all labels obtained from kube
+			labels := make(map[string]string)
+
+			// NOTE: set the pull policy to "newer".  This will cover cases
+			// where the "latest" tag requires a pull and will also
+			// transparently handle "localhost/" prefixed files which *may*
+			// refer to a locally built image OR an image running a
+			// registry on localhost.
+			pullPolicy := config.PullPolicyNewer
+			if len(container.ImagePullPolicy) > 0 {
+				// Make sure to lower the strings since K8s pull policy
+				// may be capitalized (see bugzilla.redhat.com/show_bug.cgi?id=1985905).
+				rawPolicy := string(container.ImagePullPolicy)
+				pullPolicy, err = config.ParsePullPolicy(strings.ToLower(rawPolicy))
+				if err != nil {
+					return nil, err
+				}
 			}
-		}
+			// This ensures the image is the image store
+			pullOptions := &libimage.PullOptions{}
+			pullOptions.AuthFilePath = options.Authfile
+			pullOptions.CertDirPath = options.CertDir
+			pullOptions.SignaturePolicyPath = options.SignaturePolicy
+			pullOptions.Writer = writer
+			pullOptions.Username = options.Username
+			pullOptions.Password = options.Password
+			pullOptions.InsecureSkipTLSVerify = options.SkipTLSVerify
 
-		specgenOpts := kube.CtrSpecGenOptions{
-			Container:      container,
-			Image:          pulledImages[0],
-			Volumes:        volumes,
-			PodID:          pod.ID(),
-			PodName:        podName,
-			PodInfraID:     podInfraID,
-			ConfigMaps:     configMaps,
-			SeccompPaths:   seccompPaths,
-			RestartPolicy:  ctrRestartPolicy,
-			NetNSIsHost:    p.NetNS.IsHost(),
-			SecretsManager: secretsManager,
-			LogDriver:      options.LogDriver,
-			Labels:         labels,
-		}
-		specGen, err := kube.ToSpecGen(ctx, &specgenOpts)
-		if err != nil {
-			return nil, err
-		}
+			pulledImages, err := ic.Libpod.LibimageRuntime().Pull(ctx, container.Image, pullPolicy, pullOptions)
+			if err != nil {
+				return nil, err
+			}
 
-		ctr, err := generate.MakeContainer(ctx, ic.Libpod, specGen)
-		if err != nil {
-			return nil, err
+			// Handle kube annotations
+			for k, v := range annotations {
+				switch k {
+				// Auto update annotation without container name will apply to
+				// all containers within the pod
+				case autoupdate.Label, autoupdate.AuthfileLabel:
+					labels[k] = v
+				// Auto update annotation with container name will apply only
+				// to the specified container
+				case fmt.Sprintf("%s/%s", autoupdate.Label, container.Name),
+					fmt.Sprintf("%s/%s", autoupdate.AuthfileLabel, container.Name):
+					prefixAndCtr := strings.Split(k, "/")
+					labels[prefixAndCtr[0]] = v
+				}
+			}
+
+			specgenOpts := kube.CtrSpecGenOptions{
+				Container:      container,
+				Image:          pulledImages[0],
+				Volumes:        volumes,
+				PodID:          pod.ID(),
+				PodName:        podName,
+				PodInfraID:     podInfraID,
+				ConfigMaps:     configMaps,
+				SeccompPaths:   seccompPaths,
+				RestartPolicy:  ctrRestartPolicy,
+				NetNSIsHost:    p.NetNS.IsHost(),
+				SecretsManager: secretsManager,
+				LogDriver:      options.LogDriver,
+				Labels:         labels,
+			}
+			specGen, err := kube.ToSpecGen(ctx, &specgenOpts)
+			if err != nil {
+				return nil, err
+			}
+
+			ctr, err := generate.MakeContainer(ctx, ic.Libpod, specGen)
+			if err != nil {
+				return nil, err
+			}
+			containers = append(containers, ctr)
 		}
-		containers = append(containers, ctr)
 	}
 
 	if options.Start != types.OptionalBoolFalse {
@@ -351,6 +409,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 		}
 		for id, err := range podStartErrors {
 			playKubePod.ContainerErrors = append(playKubePod.ContainerErrors, errors.Wrapf(err, "error starting container %s", id).Error())
+			fmt.Println(playKubePod.ContainerErrors)
 		}
 	}
 

@@ -179,10 +179,8 @@ func (ic *ContainerEngine) PodPrune(ctx context.Context, opts entities.PodPruneO
 	return pods.Prune(ic.ClientCtx, nil)
 }
 
-func (ic *ContainerEngine) PodCreate(ctx context.Context, opts entities.PodCreateOptions) (*entities.PodCreateReport, error) {
-	podSpec := specgen.NewPodSpecGenerator()
-	opts.ToPodSpecGen(podSpec)
-	return pods.CreatePodFromSpec(ic.ClientCtx, podSpec, nil)
+func (ic *ContainerEngine) PodCreate(ctx context.Context, specg specgen.PodSpecGenerator, opts *entities.PodCreateOptions) (*entities.PodCreateReport, error) {
+	return pods.CreatePodFromOpts(ic.ClientCtx, opts)
 }
 
 func (ic *ContainerEngine) PodTop(ctx context.Context, opts entities.PodTopOptions) (*entities.StringSliceReport, error) {

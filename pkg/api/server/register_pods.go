@@ -36,7 +36,7 @@ func (s *APIServer) registerPodsHandlers(r *mux.Router) error {
 	//   name: create
 	//   description: attributes for creating a pod
 	//   schema:
-	//     $ref: "#/definitions/PodSpecGenerator"
+	//     $ref: "#/definitions/PodCreateOptions"
 	// responses:
 	//   201:
 	//     schema:

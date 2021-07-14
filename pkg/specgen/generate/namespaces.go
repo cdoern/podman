@@ -3,6 +3,7 @@ package generate
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -20,7 +21,7 @@ import (
 )
 
 // Get the default namespace mode for any given namespace type.
-func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod) (specgen.Namespace, error) {
+func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod, isInfra bool) (specgen.Namespace, error) {
 	// The default for most is private
 	toReturn := specgen.Namespace{}
 	toReturn.NSMode = specgen.Private
@@ -29,7 +30,7 @@ func GetDefaultNamespaceMode(nsType string, cfg *config.Config, pod *libpod.Pod)
 	nsType = strings.ToLower(nsType)
 
 	// If the pod is not nil - check shared namespaces
-	if pod != nil && pod.HasInfraContainer() {
+	if pod != nil && pod.HasInfraContainer() && !isInfra {
 		podMode := false
 		switch {
 		case nsType == "pid" && pod.SharesPID():
@@ -84,7 +85,7 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 
 	// If pod is not nil, get infra container.
 	var infraCtr *libpod.Container
-	if pod != nil {
+	if pod != nil && !s.IsInfra {
 		infraID, err := pod.InfraContainerID()
 		if err != nil {
 			// This is likely to be of the fatal kind (pod was
@@ -250,7 +251,11 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 		if s.NetNS.Value != "" {
 			val = fmt.Sprintf("slirp4netns:%s", s.NetNS.Value)
 		}
-		toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, val, nil))
+		if s.IsInfra {
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, false, val, s.CNINetworks))
+		} else {
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, val, s.CNINetworks))
+		}
 	case specgen.Private:
 		fallthrough
 	case specgen.Bridge:
@@ -258,7 +263,11 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 		if err != nil {
 			return nil, err
 		}
-		toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, "bridge", s.CNINetworks))
+		if s.IsInfra {
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, false, "bridge", s.CNINetworks))
+		} else {
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, "bridge", s.CNINetworks))
+		}
 	}
 
 	if s.UseImageHosts {
@@ -272,10 +281,8 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 	if s.UseImageResolvConf {
 		toReturn = append(toReturn, libpod.WithUseImageResolvConf())
 	} else if len(s.DNSServers) > 0 {
-		var dnsServers []string
-		for _, d := range s.DNSServers {
-			dnsServers = append(dnsServers, d.String())
-		}
+		var dnsServers []net.IP
+		dnsServers = append(dnsServers, s.DNSServers...)
 		toReturn = append(toReturn, libpod.WithDNS(dnsServers))
 	}
 	if len(s.DNSOptions) > 0 {

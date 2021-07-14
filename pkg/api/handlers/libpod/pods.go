@@ -1,11 +1,17 @@
 package libpod
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
 
+	"github.com/containers/podman/v3/cmd/podman/common"
+	"github.com/containers/podman/v3/cmd/podman/containers"
 	"github.com/containers/podman/v3/libpod"
 	"github.com/containers/podman/v3/libpod/define"
 	"github.com/containers/podman/v3/pkg/api/handlers"
@@ -14,6 +20,7 @@ import (
 	"github.com/containers/podman/v3/pkg/domain/infra/abi"
 	"github.com/containers/podman/v3/pkg/specgen"
 	"github.com/containers/podman/v3/pkg/specgen/generate"
+	"github.com/containers/podman/v3/pkg/specgenutil"
 	"github.com/containers/podman/v3/pkg/util"
 	"github.com/gorilla/schema"
 	"github.com/pkg/errors"
@@ -25,24 +32,82 @@ func PodCreate(w http.ResponseWriter, r *http.Request) {
 		runtime = r.Context().Value("runtime").(*libpod.Runtime)
 		err     error
 	)
-	var psg specgen.PodSpecGenerator
-	if err := json.NewDecoder(r.Body).Decode(&psg); err != nil {
-		utils.Error(w, "failed to decode specgen", http.StatusInternalServerError, errors.Wrap(err, "failed to decode specgen"))
+
+	opts := &entities.PodCreateOptions{Infra: true, NetFlags: &entities.NetFlags{}, Net: &entities.NetOptions{StaticIP: &net.IP{}, StaticMAC: &net.HardwareAddr{}}}
+	buffer := bytes.NewBuffer(make([]byte, 0))
+	r.Body = ioutil.NopCloser(io.TeeReader(r.Body, buffer))
+	if err := json.NewDecoder(r.Body).Decode(opts); err != nil {
+		utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to decode specgen"))
 		return
 	}
-	// parse userns so we get the valid default value of userns
-	psg.Userns, err = specgen.ParseUserNamespace(psg.Userns.String())
+
+	flags, err := common.GenerateTempNetFlags(opts.NetFlags, opts.Infra)
 	if err != nil {
-		utils.Error(w, "failed to parse userns", http.StatusInternalServerError, errors.Wrap(err, "failed to parse userns"))
+		utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to generate net flags"))
 		return
 	}
-	pod, err := generate.MakePod(&psg, runtime)
+	opts.Net, err = common.NetFlagsToNetOptions(opts.Net, flags, false, nil)
+	if err != nil {
+		utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to convert net flags to net options"))
+		return
+	}
+	if opts.Net == nil {
+		opts.Net = &entities.NetOptions{}
+	}
+
+	podSpec := specgen.NewPodSpecGenerator()
+	psg, err := entities.ToPodSpecGen(*podSpec, opts)
+	if err != nil {
+		utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to decode specgen"))
+		return
+	}
+	if !psg.NoInfra {
+		infraOptions := &entities.ContainerCLIOpts{ImageVolume: "bind", IsInfra: true, Net: &entities.NetOptions{}}
+		if err := json.NewDecoder(buffer).Decode(infraOptions); err != nil {
+			utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to decode specgen"))
+			return
+		}
+		imageName := psg.InfraImage
+		rawImageName := psg.InfraImage
+		if imageName == "" {
+			imageName = "k8s.gcr.io/pause:3.5"
+			rawImageName = "k8s.gcr.io/pause:3.5"
+		}
+		curr := infraOptions.Quiet
+		infraOptions.Quiet = true
+		name, err := containers.PullImage(imageName, *infraOptions)
+		if err != nil {
+			fmt.Println(err)
+		}
+		imageName = name
+		infraOptions.Quiet = curr
+
+		psg.InfraImage = imageName
+		psg.InfraContainerSpec = specgen.NewSpecGenerator(imageName, false)
+		psg.InfraContainerSpec.Image = imageName
+		psg.InfraContainerSpec.RawImageName = rawImageName
+		psg.InfraContainerSpec.NetworkOptions = psg.NetworkOptions
+		psg.InfraContainerSpec.IsInfra = true
+
+		err = specgenutil.FillOutSpecGen(psg.InfraContainerSpec, infraOptions, []string{})
+		if err != nil {
+			utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to map spec"))
+			return
+		}
+
+		psg.InfraContainerSpec, err = specgenutil.MapSpec(psg)
+		if err != nil {
+			utils.Error(w, "Something went wrong.", http.StatusInternalServerError, errors.Wrap(err, "failed to map spec"))
+			return
+		}
+	}
+	pod, err := generate.MakePod(psg, runtime)
 	if err != nil {
 		httpCode := http.StatusInternalServerError
 		if errors.Cause(err) == define.ErrPodExists {
 			httpCode = http.StatusConflict
 		}
-		utils.Error(w, "Something went wrong.", httpCode, err)
+		utils.Error(w, "Something went wrong.", httpCode, errors.Wrap(err, "failed to make pod"))
 		return
 	}
 	utils.WriteResponse(w, http.StatusCreated, handlers.IDResponse{ID: pod.ID()})
@@ -176,6 +241,19 @@ func PodStart(w http.ResponseWriter, r *http.Request) {
 	if err != nil && errors.Cause(err) != define.ErrPodPartialFail {
 		utils.Error(w, "Something went wrong", http.StatusConflict, err)
 		return
+	} else if errors.Cause(err) == define.ErrPodPartialFail {
+		infra, err := pod.InfraContainer()
+		if err != nil {
+			logrus.Warn("no infra, not started")
+		}
+		state, err := infra.State()
+		if err != nil {
+			logrus.Warn("no infra, not started")
+		}
+		if state != define.ContainerStateRunning && err == nil {
+			utils.Error(w, "Something went wrong", http.StatusConflict, err)
+			return
+		}
 	}
 
 	report := entities.PodStartReport{Id: pod.ID()}

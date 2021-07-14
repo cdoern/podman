@@ -30,19 +30,31 @@ type VolumeDeleteReport struct{ Report }
 
 // NetOptions reflect the shared network options between
 // pods and containers
+type NetFlags struct {
+	AddHosts     []string `json:"add-host,omitempty"`
+	DNS          []string `json:"dns,omitempty"`
+	DNSOpt       []string `json:"dns-opt,omitempty"`
+	DNDSearch    []string `json:"dns-search,omitempty"`
+	MacAddr      string   `json:"mac-address,omitempty"`
+	Publish      []string `json:"publish,omitempty"`
+	IP           string   `json:"ip,omitempty"`
+	NoHosts      bool     `json:"no-hosts,omitempty"`
+	Network      string   `json:"network,omitempty"`
+	NetworkAlias []string `json:"network-alias,omitempty"`
+}
 type NetOptions struct {
-	AddHosts           []string
-	Aliases            []string
+	AddHosts           []string //`json:"add-host,omitempty"`
+	Aliases            []string //`json:"network-alias,omitempty"`
 	CNINetworks        []string
 	UseImageResolvConf bool
-	DNSOptions         []string
-	DNSSearch          []string
-	DNSServers         []net.IP
+	DNSOptions         []string //`json:"dns-opt,omitempty"`
+	DNSSearch          []string //`json:"dns-search,omitempty"`
+	DNSServers         []net.IP //`json:"dns,omitempty"`
 	Network            specgen.Namespace
-	NoHosts            bool
-	PublishPorts       []specgen.PortMapping
-	StaticIP           *net.IP
-	StaticMAC          *net.HardwareAddr
+	NoHosts            bool                  //`json:"no-hosts,omitempty"`
+	PublishPorts       []specgen.PortMapping //`json:"publish-ports,omitempty"`
+	StaticIP           *net.IP               //`json:"ip,omitempty"`
+	StaticMAC          *net.HardwareAddr     //`json:"mac-address,omitempty"`
 	// NetworkOptions are additional options for each network
 	NetworkOptions map[string][]string
 }

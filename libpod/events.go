@@ -78,7 +78,7 @@ func (c *Container) newNetworkEvent(status events.Status, netName string) {
 }
 
 // newPodEvent creates a new event for a libpod pod
-func (p *Pod) newPodEvent(status events.Status) {
+func (p *Pod) NewPodEvent(status events.Status) {
 	e := events.NewEvent(status)
 	e.ID = p.ID()
 	e.Name = p.Name()

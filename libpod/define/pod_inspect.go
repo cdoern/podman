@@ -79,7 +79,7 @@ type InspectPodInfraConfig struct {
 	NoManageResolvConf bool
 	// DNSServer is a set of DNS Servers that will be used by the infra
 	// container's resolv.conf and shared with the remainder of the pod.
-	DNSServer []string
+	DNSServer []net.IP
 	// DNSSearch is a set of DNS search domains that will be used by the
 	// infra container's resolv.conf and shared with the remainder of the
 	// pod.

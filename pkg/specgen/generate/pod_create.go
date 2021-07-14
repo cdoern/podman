@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/containers/podman/v3/libpod"
-	"github.com/containers/podman/v3/pkg/rootless"
 	"github.com/containers/podman/v3/pkg/specgen"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -14,19 +13,45 @@ func MakePod(p *specgen.PodSpecGenerator, rt *libpod.Runtime) (*libpod.Pod, erro
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
-	options, err := createPodOptions(p, rt)
+	if !p.NoInfra && p.InfraContainerSpec != nil {
+		p.InfraContainerSpec.IsInfra = true
+	}
+
+	options, err := createPodOptions(p, rt, p.InfraContainerSpec)
 	if err != nil {
 		return nil, err
 	}
-	return rt.NewPod(context.Background(), options...)
+	pod, err := rt.NewPod(context.Background(), *p, options...)
+	if err != nil {
+		return nil, err
+	}
+	if !p.NoInfra && p.InfraContainerSpec != nil {
+		p.InfraContainerSpec.Pod = pod.ID()
+		if p.InfraContainerSpec.Name == "" {
+			p.InfraContainerSpec.Name = pod.ID()[:12] + "-infra"
+		}
+		_, err = CompleteSpec(context.Background(), rt, p.InfraContainerSpec)
+		if err != nil {
+			return nil, err
+		}
+		infraCtr, err := MakeContainer(context.Background(), rt, p.InfraContainerSpec)
+		if err != nil {
+			return nil, err
+		}
+		pod, err = rt.AddInfra(context.Background(), pod, infraCtr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return pod, nil
 }
 
-func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime) ([]libpod.PodCreateOption, error) {
+func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime, infraSpec *specgen.SpecGenerator) ([]libpod.PodCreateOption, error) {
 	var (
 		options []libpod.PodCreateOption
 	)
-	if !p.NoInfra {
-		options = append(options, libpod.WithInfraContainer())
+	if !p.NoInfra { //&& infraSpec != nil {
+		options = append(options, libpod.WithInfraContainer(p.InfraContainerSpec))
 		nsOptions, err := GetNamespaceOptions(p.SharedNamespaces, p.NetNS.IsHost())
 		if err != nil {
 			return nil, err
@@ -48,7 +73,7 @@ func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime) ([]libpod
 		if err != nil {
 			return nil, errors.Wrapf(err, "error creating infra container exit command")
 		}
-		options = append(options, libpod.WithPodInfraExitCommand(exitCommand))
+		libpod.WithPodInfraExitCommand(exitCommand, p.InfraContainerSpec)
 	}
 	if len(p.CgroupParent) > 0 {
 		options = append(options, libpod.WithPodCgroupParent(p.CgroupParent))
@@ -59,105 +84,12 @@ func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime) ([]libpod
 	if len(p.Name) > 0 {
 		options = append(options, libpod.WithPodName(p.Name))
 	}
-	if p.ResourceLimits != nil && p.ResourceLimits.CPU != nil && p.ResourceLimits.CPU.Period != nil && p.ResourceLimits.CPU.Quota != nil {
-		if *p.ResourceLimits.CPU.Period != 0 || *p.ResourceLimits.CPU.Quota != 0 {
-			options = append(options, libpod.WithPodCPUPAQ((*p.ResourceLimits.CPU.Period), (*p.ResourceLimits.CPU.Quota)))
-		}
-	}
-	if p.ResourceLimits != nil && p.ResourceLimits.CPU != nil && p.ResourceLimits.CPU.Cpus != "" {
-		options = append(options, libpod.WithPodCPUSetCPUs(p.ResourceLimits.CPU.Cpus))
-	}
-	if len(p.Hostname) > 0 {
-		options = append(options, libpod.WithPodHostname(p.Hostname))
-	}
-	if len(p.HostAdd) > 0 {
-		options = append(options, libpod.WithPodHosts(p.HostAdd))
-	}
-	if len(p.DNSServer) > 0 {
-		var dnsServers []string
-		for _, d := range p.DNSServer {
-			dnsServers = append(dnsServers, d.String())
-		}
-		options = append(options, libpod.WithPodDNS(dnsServers))
-	}
-	if len(p.DNSOption) > 0 {
-		options = append(options, libpod.WithPodDNSOption(p.DNSOption))
-	}
-	if len(p.DNSSearch) > 0 {
-		options = append(options, libpod.WithPodDNSSearch(p.DNSSearch))
-	}
-	if p.StaticIP != nil {
-		options = append(options, libpod.WithPodStaticIP(*p.StaticIP))
-	}
-	if p.StaticMAC != nil {
-		options = append(options, libpod.WithPodStaticMAC(*p.StaticMAC))
-	}
-	if p.NoManageResolvConf {
-		options = append(options, libpod.WithPodUseImageResolvConf())
-	}
-	if len(p.CNINetworks) > 0 {
-		options = append(options, libpod.WithPodNetworks(p.CNINetworks))
-	}
-
-	if len(p.InfraImage) > 0 {
-		options = append(options, libpod.WithInfraImage(p.InfraImage))
-	}
-
-	if len(p.InfraName) > 0 {
-		options = append(options, libpod.WithInfraName(p.InfraName))
-	}
-
-	if len(p.InfraCommand) > 0 {
-		options = append(options, libpod.WithInfraCommand(p.InfraCommand))
-	}
-
-	if !p.Pid.IsDefault() {
-		options = append(options, libpod.WithPodPidNS(p.Pid))
-	}
-
-	switch p.NetNS.NSMode {
-	case specgen.Default, "":
-		if p.NoInfra {
-			logrus.Debugf("No networking because the infra container is missing")
-			break
-		}
-		if rootless.IsRootless() {
-			logrus.Debugf("Pod will use slirp4netns")
-			options = append(options, libpod.WithPodSlirp4netns(p.NetworkOptions))
-		} else {
-			logrus.Debugf("Pod using bridge network mode")
-		}
-	case specgen.Bridge:
-		logrus.Debugf("Pod using bridge network mode")
-	case specgen.Host:
-		logrus.Debugf("Pod will use host networking")
-		options = append(options, libpod.WithPodHostNetwork())
-	case specgen.Slirp:
-		logrus.Debugf("Pod will use slirp4netns")
-		options = append(options, libpod.WithPodSlirp4netns(p.NetworkOptions))
-	case specgen.NoNetwork:
-		logrus.Debugf("Pod will not use networking")
-		options = append(options, libpod.WithPodNoNetwork())
-	default:
-		return nil, errors.Errorf("pods presently do not support network mode %s", p.NetNS.NSMode)
-	}
-
-	if p.NoManageHosts {
-		options = append(options, libpod.WithPodUseImageHosts())
-	}
-	if len(p.PortMappings) > 0 {
-		ports, _, _, err := ParsePortMapping(p.PortMappings)
-		if err != nil {
-			return nil, err
-		}
-		options = append(options, libpod.WithInfraContainerPorts(ports))
-	}
-	options = append(options, libpod.WithPodCgroups())
 	if p.PodCreateCommand != nil {
 		options = append(options, libpod.WithPodCreateCommand(p.PodCreateCommand))
 	}
-	if len(p.InfraConmonPidFile) > 0 {
-		options = append(options, libpod.WithInfraConmonPidFile(p.InfraConmonPidFile))
+
+	if len(p.Hostname) > 0 {
+		options = append(options, libpod.WithPodHostname(p.Hostname))
 	}
 
 	return options, nil

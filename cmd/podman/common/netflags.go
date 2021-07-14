@@ -2,14 +2,18 @@ package common
 
 import (
 	"net"
+	"reflect"
 
 	"github.com/containers/common/pkg/completion"
 	"github.com/containers/podman/v3/cmd/podman/parse"
 	"github.com/containers/podman/v3/libpod/define"
 	"github.com/containers/podman/v3/pkg/domain/entities"
 	"github.com/containers/podman/v3/pkg/specgen"
+	"github.com/containers/podman/v3/pkg/specgenutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func DefineNetFlags(cmd *cobra.Command) {
@@ -84,27 +88,73 @@ func DefineNetFlags(cmd *cobra.Command) {
 	)
 }
 
+func GenerateTempNetFlags(net *entities.NetFlags, infra bool) (pflag.FlagSet, error) {
+	if net == nil {
+		net = &entities.NetFlags{}
+	}
+	flags := pflag.FlagSet{}
+	fields := reflect.TypeOf(*net)
+	values := reflect.ValueOf(*net) //.Elem()
+	num := fields.NumField()
+	for i := 0; i < num; i++ {
+		name := fields.Field(i).Tag.Get("json")
+		val := values.Field(i)
+
+		switch val.Kind() {
+		case reflect.Slice:
+			if !val.IsNil() && !infra {
+				return pflag.FlagSet{}, define.ErrInvalidArg
+			}
+			flags.StringSlice(name, val.Interface().([]string), "")
+		case reflect.String:
+			if val.String() != "" && !infra {
+				return pflag.FlagSet{}, define.ErrInvalidArg
+			}
+			flags.String(name, val.String(), "")
+		case reflect.Bool:
+			if val.Bool() && !infra {
+				return pflag.FlagSet{}, define.ErrInvalidArg
+			}
+			flags.Bool(name, val.Bool(), "")
+		}
+	}
+	return flags, nil
+}
+
 // NetFlagsToNetOptions parses the network flags for the given cmd.
 // The netnsFromConfig bool is used to indicate if the --network flag
 // should always be parsed regardless if it was set on the cli.
-func NetFlagsToNetOptions(cmd *cobra.Command, netnsFromConfig bool) (*entities.NetOptions, error) {
+func NetFlagsToNetOptions(opts *entities.NetOptions, flags pflag.FlagSet, netnsFromConfig bool, createOptions *entities.PodCreateOptions) (*entities.NetOptions, error) {
 	var (
 		err error
 	)
-	opts := entities.NetOptions{}
-	opts.AddHosts, err = cmd.Flags().GetStringSlice("add-host")
-	if err != nil {
-		return nil, err
+	if createOptions != nil {
+		createOptions.NetFlags = &entities.NetFlags{}
+	} else {
+		createOptions = &entities.PodCreateOptions{
+			NetFlags: &entities.NetFlags{},
+		}
 	}
-	// Verify the additional hosts are in correct format
-	for _, host := range opts.AddHosts {
-		if _, err := parse.ValidateExtraHost(host); err != nil {
+	if opts == nil {
+		opts = &entities.NetOptions{}
+	}
+	if flags.Changed("add-host") {
+		opts.AddHosts, err = flags.GetStringSlice("add-host")
+		createOptions.NetFlags.AddHosts = opts.AddHosts
+		if err != nil {
 			return nil, err
+		}
+		// Verify the additional hosts are in correct format
+		for _, host := range opts.AddHosts {
+			if _, err := parse.ValidateExtraHost(host); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	if cmd.Flags().Changed("dns") {
-		servers, err := cmd.Flags().GetStringSlice("dns")
+	if flags.Changed("dns") {
+		servers, err := flags.GetStringSlice("dns")
+		createOptions.NetFlags.DNS = servers
 		if err != nil {
 			return nil, err
 		}
@@ -124,16 +174,17 @@ func NetFlagsToNetOptions(cmd *cobra.Command, netnsFromConfig bool) (*entities.N
 		}
 	}
 
-	if cmd.Flags().Changed("dns-opt") {
-		options, err := cmd.Flags().GetStringSlice("dns-opt")
+	if flags.Changed("dns-opt") {
+		options, err := flags.GetStringSlice("dns-opt")
 		if err != nil {
 			return nil, err
 		}
 		opts.DNSOptions = options
+		createOptions.NetFlags.DNSOpt = opts.DNSOptions
 	}
 
-	if cmd.Flags().Changed("dns-search") {
-		dnsSearches, err := cmd.Flags().GetStringSlice("dns-search")
+	if flags.Changed("dns-search") {
+		dnsSearches, err := flags.GetStringSlice("dns-search")
 		if err != nil {
 			return nil, err
 		}
@@ -150,55 +201,71 @@ func NetFlagsToNetOptions(cmd *cobra.Command, netnsFromConfig bool) (*entities.N
 			}
 		}
 		opts.DNSSearch = dnsSearches
+		createOptions.NetFlags.DNDSearch = opts.DNSSearch
 	}
 
-	m, err := cmd.Flags().GetString("mac-address")
-	if err != nil {
-		return nil, err
-	}
-	if len(m) > 0 {
-		mac, err := net.ParseMAC(m)
+	if flags.Changed("mac-address") {
+		m, err := flags.GetString("mac-address")
+		createOptions.NetFlags.MacAddr = m
 		if err != nil {
 			return nil, err
 		}
-		opts.StaticMAC = &mac
+		if len(m) > 0 {
+			mac, err := net.ParseMAC(m)
+			if err != nil {
+				return nil, err
+			}
+			opts.StaticMAC = &mac
+		}
 	}
 
-	inputPorts, err := cmd.Flags().GetStringSlice("publish")
-	if err != nil {
-		return nil, err
-	}
-	if len(inputPorts) > 0 {
-		opts.PublishPorts, err = CreatePortBindings(inputPorts)
+	if flags.Changed("publish") {
+		inputPorts, err := flags.GetStringSlice("publish")
+		createOptions.NetFlags.Publish = inputPorts
 		if err != nil {
 			return nil, err
 		}
+		if len(inputPorts) > 0 {
+			opts.PublishPorts, err = specgenutil.CreatePortBindings(inputPorts)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	ip, err := cmd.Flags().GetString("ip")
-	if err != nil {
-		return nil, err
-	}
-	if ip != "" {
-		staticIP := net.ParseIP(ip)
-		if staticIP == nil {
-			return nil, errors.Errorf("%s is not an ip address", ip)
+	if flags.Changed("ip") {
+		ip, err := flags.GetString("ip")
+		createOptions.NetFlags.IP = ip
+		if err != nil {
+			return nil, err
 		}
-		if staticIP.To4() == nil {
-			return nil, errors.Wrapf(define.ErrInvalidArg, "%s is not an IPv4 address", ip)
+		if ip != "" {
+			staticIP := net.ParseIP(ip)
+			if staticIP == nil {
+				return nil, errors.Errorf("%s is not an ip address", ip)
+			}
+			if staticIP.To4() == nil {
+				return nil, errors.Wrapf(define.ErrInvalidArg, "%s is not an IPv4 address", ip)
+			}
+			opts.StaticIP = &staticIP
 		}
-		opts.StaticIP = &staticIP
 	}
 
-	opts.NoHosts, err = cmd.Flags().GetBool("no-hosts")
+	opts.NoHosts, err = flags.GetBool("no-hosts")
 	if err != nil {
-		return nil, err
+		logrus.Warnf("no-hosts undefined")
+		createOptions.NetFlags.NoHosts = false
+		opts.NoHosts = false
+		err = nil
+	} else {
+		createOptions.NetFlags.NoHosts = opts.NoHosts
 	}
 
 	// parse the --network value only when the flag is set or we need to use
 	// the netns config value, e.g. when --pod is not used
-	if netnsFromConfig || cmd.Flag("network").Changed {
-		network, err := cmd.Flags().GetString("network")
+	if netnsFromConfig || flags.Changed("network") {
+		network, err := flags.GetString("network")
+		createOptions.NetFlags.Network = network
 		if err != nil {
 			return nil, err
 		}
@@ -215,12 +282,15 @@ func NetFlagsToNetOptions(cmd *cobra.Command, netnsFromConfig bool) (*entities.N
 		opts.CNINetworks = cniNets
 	}
 
-	aliases, err := cmd.Flags().GetStringSlice("network-alias")
-	if err != nil {
-		return nil, err
+	if flags.Changed("network-alias") {
+		aliases, err := flags.GetStringSlice("network-alias")
+		createOptions.NetFlags.NetworkAlias = aliases
+		if err != nil {
+			return nil, err
+		}
+		if len(aliases) > 0 {
+			opts.Aliases = aliases
+		}
 	}
-	if len(aliases) > 0 {
-		opts.Aliases = aliases
-	}
-	return &opts, err
+	return opts, err
 }

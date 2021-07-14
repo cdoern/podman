@@ -17,8 +17,8 @@ class TestApi(APITestCase):
             self.uri("/pods/create"),
             json={
                 "name": pod_name[0],
-                "no_infra": False,
-                "portmappings": [{"host_ip": "127.0.0.1", "host_port": 8889, "container_port": 89}],
+                "infra": True,
+                "publish-ports": [{"host_ip": "127.0.0.1", "host_port": 8889, "container_port": 89}],
             },
         )
         self.assertEqual(r.status_code, 201, r.text)
@@ -36,8 +36,8 @@ class TestApi(APITestCase):
             self.uri("/pods/create"),
             json={
                 "name": pod_name[1],
-                "no_infra": False,
-                "portmappings": [{"host_ip": "127.0.0.1", "host_port": 8889, "container_port": 89}],
+                "infra": True,
+                "publish-ports": [{"host_ip": "127.0.0.1", "host_port": 8889, "container_port": 89}],
             },
         )
         self.assertEqual(r.status_code, 201, r.text)

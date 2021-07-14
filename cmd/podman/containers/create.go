@@ -15,6 +15,7 @@ import (
 	"github.com/containers/podman/v3/cmd/podman/utils"
 	"github.com/containers/podman/v3/pkg/domain/entities"
 	"github.com/containers/podman/v3/pkg/specgen"
+	"github.com/containers/podman/v3/pkg/specgenutil"
 	"github.com/containers/podman/v3/pkg/util"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -50,8 +51,8 @@ var (
 )
 
 var (
-	cliVals           common.ContainerCLIOpts
 	InitContainerType string
+	cliVals           entities.ContainerCLIOpts
 )
 
 func createFlags(cmd *cobra.Command) {
@@ -65,13 +66,18 @@ func createFlags(cmd *cobra.Command) {
 	)
 
 	flags.SetInterspersed(false)
-	common.DefineCreateFlags(cmd, &cliVals)
+	common.DefineCreateFlags(cmd, &cliVals, false)
 	common.DefineNetFlags(cmd)
 
 	flags.SetNormalizeFunc(utils.AliasFlags)
 
 	if registry.IsRemote() {
-		_ = flags.MarkHidden("conmon-pidfile")
+		if cliVals.IsInfra {
+			_ = flags.MarkHidden("infra-conmon-pidfile")
+		} else {
+			_ = flags.MarkHidden("conmon-pidfile")
+		}
+
 		_ = flags.MarkHidden("pidfile")
 	}
 
@@ -95,7 +101,8 @@ func create(cmd *cobra.Command, args []string) error {
 	var (
 		err error
 	)
-	cliVals.Net, err = common.NetFlagsToNetOptions(cmd, cliVals.Pod == "")
+	flags := cmd.Flags()
+	cliVals.Net, err = common.NetFlagsToNetOptions(nil, *flags, cliVals.Pod == "", nil)
 	if err != nil {
 		return err
 	}
@@ -111,22 +118,22 @@ func create(cmd *cobra.Command, args []string) error {
 		cliVals.InitContainerType = initctr
 	}
 
-	if err := createInit(cmd); err != nil {
+	cliVals, err = CreateInit(cmd, cliVals, false)
+	if err != nil {
 		return err
 	}
-
 	imageName := args[0]
 	rawImageName := ""
 	if !cliVals.RootFS {
 		rawImageName = args[0]
-		name, err := pullImage(args[0])
+		name, err := PullImage(args[0], cliVals)
 		if err != nil {
 			return err
 		}
 		imageName = name
 	}
 	s := specgen.NewSpecGenerator(imageName, cliVals.RootFS)
-	if err := common.FillOutSpecGen(s, &cliVals, args); err != nil {
+	if err := specgenutil.FillOutSpecGen(s, &cliVals, args); err != nil {
 		return err
 	}
 	s.RawImageName = rawImageName
@@ -167,22 +174,73 @@ func replaceContainer(name string) error {
 	return removeContainers([]string{name}, rmOptions, false)
 }
 
-func createInit(c *cobra.Command) error {
-	cliVals.StorageOpt = registry.PodmanConfig().StorageOpts
+func CreateInit(c *cobra.Command, vals entities.ContainerCLIOpts, isInfra bool) (entities.ContainerCLIOpts, error) {
+	if !isInfra {
+		if c.Flag("shm-size").Changed {
+			vals.ShmSize = c.Flag("shm-size").Value.String()
+		}
+		if c.Flag("cpu-period").Changed && c.Flag("cpus").Changed {
+			return vals, errors.Errorf("--cpu-period and --cpus cannot be set together")
+		}
+		if c.Flag("cpu-quota").Changed && c.Flag("cpus").Changed {
+			return vals, errors.Errorf("--cpu-quota and --cpus cannot be set together")
+		}
+		vals.UserNS = c.Flag("userns").Value.String()
+		// if user did not modify --userns flag and did turn on
+		// uid/gid mappings, set userns flag to "private"
+		if !c.Flag("userns").Changed && vals.UserNS == "host" {
+			if len(vals.UIDMap) > 0 ||
+				len(vals.GIDMap) > 0 ||
+				vals.SubUIDName != "" ||
+				vals.SubGIDName != "" {
+				vals.UserNS = "private"
+			}
+		}
+		vals.IPC = c.Flag("ipc").Value.String()
+		vals.UTS = c.Flag("uts").Value.String()
+		vals.PID = c.Flag("pid").Value.String()
+		vals.CgroupNS = c.Flag("cgroupns").Value.String()
 
-	if c.Flag("shm-size").Changed {
-		cliVals.ShmSize = c.Flag("shm-size").Value.String()
+		if c.Flags().Changed("group-add") {
+			groups := []string{}
+			for _, g := range cliVals.GroupAdd {
+				if g == "keep-groups" {
+					if len(cliVals.GroupAdd) > 1 {
+						return vals, errors.New("the '--group-add keep-groups' option is not allowed with any other --group-add options")
+					}
+					if registry.IsRemote() {
+						return vals, errors.New("the '--group-add keep-groups' option is not supported in remote mode")
+					}
+					vals.Annotation = append(vals.Annotation, "run.oci.keep_original_groups=1")
+				} else {
+					groups = append(groups, g)
+				}
+			}
+			vals.GroupAdd = groups
+		}
+
+		if c.Flags().Changed("pids-limit") {
+			val := c.Flag("pids-limit").Value.String()
+			pidsLimit, err := strconv.ParseInt(val, 10, 32)
+			if err != nil {
+				return vals, err
+			}
+			vals.PIDsLimit = &pidsLimit
+		}
+		if c.Flags().Changed("env") {
+			env, err := c.Flags().GetStringArray("env")
+			if err != nil {
+				return vals, errors.Wrapf(err, "retrieve env flag")
+			}
+			vals.Env = env
+		}
+		if c.Flag("cgroups").Changed && vals.CGroupsMode == "split" && registry.IsRemote() {
+			return vals, errors.Errorf("the option --cgroups=%q is not supported in remote mode", vals.CGroupsMode)
+		}
 	}
 
-	if (c.Flag("dns").Changed || c.Flag("dns-opt").Changed || c.Flag("dns-search").Changed) && (cliVals.Net.Network.NSMode == specgen.NoNetwork || cliVals.Net.Network.IsContainer()) {
-		return errors.Errorf("conflicting options: dns and the network mode.")
-	}
-
-	if c.Flag("cpu-period").Changed && c.Flag("cpus").Changed {
-		return errors.Errorf("--cpu-period and --cpus cannot be set together")
-	}
-	if c.Flag("cpu-quota").Changed && c.Flag("cpus").Changed {
-		return errors.Errorf("--cpu-quota and --cpus cannot be set together")
+	if (c.Flag("dns").Changed || c.Flag("dns-opt").Changed || c.Flag("dns-search").Changed) && vals.Net != nil && (vals.Net.Network.NSMode == specgen.NoNetwork || vals.Net.Network.IsContainer()) {
+		return vals, errors.Errorf("conflicting options: dns and the network mode.")
 	}
 	if c.Flag("pod").Changed && !strings.HasPrefix(c.Flag("pod").Value.String(), "new:") && c.Flag("userns").Changed {
 		return errors.Errorf("--userns and --pod cannot be set together")
@@ -190,76 +248,26 @@ func createInit(c *cobra.Command) error {
 
 	noHosts, err := c.Flags().GetBool("no-hosts")
 	if err != nil {
-		return err
+		return vals, err
 	}
 	if noHosts && c.Flag("add-host").Changed {
-		return errors.Errorf("--no-hosts and --add-host cannot be set together")
-	}
-	cliVals.UserNS = c.Flag("userns").Value.String()
-	// if user did not modify --userns flag and did turn on
-	// uid/gid mappings, set userns flag to "private"
-	if !c.Flag("userns").Changed && cliVals.UserNS == "host" {
-		if len(cliVals.UIDMap) > 0 ||
-			len(cliVals.GIDMap) > 0 ||
-			cliVals.SubUIDName != "" ||
-			cliVals.SubGIDName != "" {
-			cliVals.UserNS = "private"
-		}
+		return vals, errors.Errorf("--no-hosts and --add-host cannot be set together")
 	}
 
-	cliVals.IPC = c.Flag("ipc").Value.String()
-	cliVals.UTS = c.Flag("uts").Value.String()
-	cliVals.PID = c.Flag("pid").Value.String()
-	cliVals.CgroupNS = c.Flag("cgroupns").Value.String()
-	if c.Flag("entrypoint").Changed {
+	if !isInfra && c.Flag("entrypoint").Changed {
 		val := c.Flag("entrypoint").Value.String()
-		cliVals.Entrypoint = &val
-	}
+		vals.Entrypoint = &val
+	} else if isInfra && c.Flag("infra-command").Changed {
 
-	if c.Flags().Changed("group-add") {
-		groups := []string{}
-		for _, g := range cliVals.GroupAdd {
-			if g == "keep-groups" {
-				if len(cliVals.GroupAdd) > 1 {
-					return errors.New("the '--group-add keep-groups' option is not allowed with any other --group-add options")
-				}
-				if registry.IsRemote() {
-					return errors.New("the '--group-add keep-groups' option is not supported in remote mode")
-				}
-				cliVals.Annotation = append(cliVals.Annotation, "run.oci.keep_original_groups=1")
-			} else {
-				groups = append(groups, g)
-			}
-		}
-		cliVals.GroupAdd = groups
-	}
-
-	if c.Flags().Changed("pids-limit") {
-		val := c.Flag("pids-limit").Value.String()
-		pidsLimit, err := strconv.ParseInt(val, 10, 32)
-		if err != nil {
-			return err
-		}
-		cliVals.PIDsLimit = &pidsLimit
-	}
-	if c.Flags().Changed("env") {
-		env, err := c.Flags().GetStringArray("env")
-		if err != nil {
-			return errors.Wrapf(err, "retrieve env flag")
-		}
-		cliVals.Env = env
-	}
-	if c.Flag("cgroups").Changed && cliVals.CGroupsMode == "split" && registry.IsRemote() {
-		return errors.Errorf("the option --cgroups=%q is not supported in remote mode", cliVals.CGroupsMode)
 	}
 
 	// Docker-compatibility: the "-h" flag for run/create is reserved for
 	// the hostname (see https://github.com/containers/podman/issues/1367).
 
-	return nil
+	return vals, nil
 }
 
-func pullImage(imageName string) (string, error) {
+func PullImage(imageName string, cliVals entities.ContainerCLIOpts) (string, error) {
 	pullPolicy, err := config.ValidatePullPolicy(cliVals.Pull)
 	if err != nil {
 		return "", err
@@ -333,6 +341,31 @@ func createPodIfNecessary(s *specgen.SpecGenerator, netOpts *entities.NetOptions
 	s.ContainerBasicConfig.Hostname = ""
 	s.ContainerNetworkConfig = specgen.ContainerNetworkConfig{}
 
+	var err error
 	s.Pod = podName
-	return registry.ContainerEngine().PodCreate(context.Background(), createOptions)
+	podSpec := specgen.NewPodSpecGenerator()
+	podSpec, err = entities.ToPodSpecGen(*podSpec, &createOptions)
+	if err != nil {
+		return nil, err
+	}
+	infraOpts := entities.ContainerCLIOpts{ImageVolume: "bind", Net: netOpts, Quiet: true}
+	rawImageName := "k8s.gcr.io/pause:3.5"
+	name, err := PullImage(rawImageName, infraOpts)
+	if err != nil {
+		fmt.Println(err)
+	}
+	imageName := name
+	podSpec.InfraImage = imageName
+	podSpec.InfraContainerSpec = specgen.NewSpecGenerator(imageName, false)
+	podSpec.InfraContainerSpec.RawImageName = rawImageName
+	podSpec.InfraContainerSpec.NetworkOptions = podSpec.NetworkOptions
+	err = specgenutil.FillOutSpecGen(podSpec.InfraContainerSpec, &infraOpts, []string{})
+	if err != nil {
+		return nil, err
+	}
+	podSpec.InfraContainerSpec, err = specgenutil.MapSpec(podSpec)
+	if err != nil {
+		return nil, err
+	}
+	return registry.ContainerEngine().PodCreate(context.Background(), *podSpec, &createOptions)
 }

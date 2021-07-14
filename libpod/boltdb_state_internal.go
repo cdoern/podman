@@ -535,7 +535,9 @@ func (s *BoltState) addContainer(ctr *Container, pod *Pod) error {
 
 	// JSON container structs to insert into DB
 	// TODO use a higher-performance struct encoding than JSON
-	configJSON, err := json.Marshal(ctr.config)
+	configJSON := []byte{}
+	var err error
+	configJSON, err = json.Marshal(ctr.config)
 	if err != nil {
 		return errors.Wrapf(err, "error marshalling container %s config to JSON", ctr.ID())
 	}

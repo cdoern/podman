@@ -191,6 +191,10 @@ type ContainerBasicConfig struct {
 	// The execution domain system allows Linux to provide limited support
 	// for binaries compiled under other UNIX-like operating systems.
 	Personality *spec.LinuxPersonality `json:"personality,omitempty"`
+	// IsInfra denotes that we are creating the infra container
+	IsInfra bool `json:"is_infra,omitempty"`
+	// InfraExitCommand allows us to pass the infra ecit command through the spec
+	InfraExitCommand []string `json:"infra_exit_cmd,omitempty"`
 }
 
 // ContainerStorageConfig contains information on the storage configuration of a

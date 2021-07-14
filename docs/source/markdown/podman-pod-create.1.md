@@ -51,7 +51,7 @@ Set custom DNS options in the /etc/resolv.conf file that will be shared between 
 
 Set custom DNS search domains in the /etc/resolv.conf file that will be shared between all containers in the pod.
 
-#### **--help**
+#### **--help**, **-h**
 
 Print usage statement.
 

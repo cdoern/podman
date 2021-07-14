@@ -172,6 +172,7 @@ type PodSpecGenerator struct {
 	PodNetworkConfig
 	PodCgroupConfig
 	PodResourceConfig
+	InfraContainerSpec *SpecGenerator
 }
 
 type PodResourceConfig struct {

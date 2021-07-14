@@ -72,7 +72,7 @@ func (p *Pod) GenerateForKube() (*v1.Pod, []v1.ServicePort, error) {
 			return nil, servicePorts, err
 		}
 		servicePorts = containerPortsToServicePorts(ports)
-		hostNetwork = p.config.InfraContainer.HostNetwork
+		hostNetwork = !p.config.InfraContainer.ContainerNetworkConfig.CreateNetNS
 	}
 	pod, err := p.podWithContainers(allContainers, ports, hostNetwork)
 	if err != nil {

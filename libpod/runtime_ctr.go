@@ -172,6 +172,7 @@ func (r *Runtime) initContainerVariables(rSpec *spec.Spec, config *ContainerConf
 		}
 		ctr.config.ShmSize = size
 		ctr.config.StopSignal = 15
+
 		ctr.config.StopTimeout = r.config.Engine.StopTimeout
 	} else {
 		// This is a restore from an imported checkpoint
@@ -211,7 +212,11 @@ func (r *Runtime) initContainerVariables(rSpec *spec.Spec, config *ContainerConf
 }
 
 func (r *Runtime) newContainer(ctx context.Context, rSpec *spec.Spec, options ...CtrCreateOption) (*Container, error) {
-	ctr, err := r.initContainerVariables(rSpec, nil)
+	var ctr *Container
+	var err error
+
+	ctr, err = r.initContainerVariables(rSpec, nil)
+
 	if err != nil {
 		return nil, errors.Wrapf(err, "error initializing container variables")
 	}
@@ -230,7 +235,9 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 	if err := ctr.validate(); err != nil {
 		return nil, err
 	}
-
+	if ctr.config.IsInfra {
+		ctr.config.StopTimeout = 10
+	}
 	// normalize the networks to names
 	// ocicni only knows about cni names so we have to make
 	// sure we do not use ids internally
@@ -313,7 +320,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 		switch r.config.Engine.CgroupManager {
 		case config.CgroupfsCgroupsManager:
 			if ctr.config.CgroupParent == "" {
-				if pod != nil && pod.config.UsePodCgroup {
+				if pod != nil && pod.config.UsePodCgroup && !ctr.IsInfra() {
 					podCgroup, err := pod.CgroupPath()
 					if err != nil {
 						return nil, errors.Wrapf(err, "error retrieving pod %s cgroup", pod.ID())
@@ -334,7 +341,7 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 		case config.SystemdCgroupsManager:
 			if ctr.config.CgroupParent == "" {
 				switch {
-				case pod != nil && pod.config.UsePodCgroup:
+				case pod != nil && pod.config.UsePodCgroup && !ctr.IsInfra():
 					podCgroup, err := pod.CgroupPath()
 					if err != nil {
 						return nil, errors.Wrapf(err, "error retrieving pod %s cgroup", pod.ID())

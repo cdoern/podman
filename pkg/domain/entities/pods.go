@@ -106,23 +106,142 @@ type PodRmReport struct {
 	Id  string //nolint
 }
 
+// PodCreateOptions provides all possible options for creating a pod and its infra container
+// swagger:model PodCreateOptions
 type PodCreateOptions struct {
-	CGroupParent       string
-	CreateCommand      []string
-	Hostname           string
-	Infra              bool
-	InfraImage         string
-	InfraName          string
-	InfraCommand       string
-	InfraConmonPidFile string
-	Labels             map[string]string
-	Name               string
+	CGroupParent       string            `json:"cgroup-parent,omitempty"`
+	CreateCommand      []string          `json:"create-command,omitempty"`
+	Hostname           string            `json:"hostname,omitempty"`
+	Infra              bool              `json:"infra"`
+	InfraImage         string            `json:"infra-image,omitempty"`
+	InfraName          string            `json:"infra-name,omitempty"`
+	InfraCommand       string            `json:"infra-command,omitempty"`
+	InfraConmonPidFile string            `json:"infra-conmon-pidfile,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+	Name               string            `json:"name,omitempty"`
+	NetFlags           *NetFlags
 	Net                *NetOptions
-	Share              []string
-	Pid                string
-	Cpus               float64
-	CpusetCpus         string
+	Share              []string `json:"share,omitempty"`
+	Pid                string   `json:"pid,omitempty"`
+	Cpus               float64  `json:"cpus,omitempty"`
+	CpusetCpus         string   `json:"cpuset-Cpus,omitempty"`
 	Userns             specgen.Namespace
+}
+
+type ContainerCLIOpts struct {
+	Annotation        []string `json:"annotations,omitempty"`
+	Attach            []string `json:"attach,omitempty"`
+	Authfile          string   `json:"authfile,omitempty"`
+	BlkIOWeight       string   `json:"blk-io-wt,omitempty"`
+	BlkIOWeightDevice []string `json:"cblk-wt-device,omitempty"`
+	CapAdd            []string `json:"cap-add,omitempty"`
+	CapDrop           []string `json:"cap-drop,omitempty"`
+	CgroupNS          string   `json:"cgroup-ns,omitempty"`
+	CGroupsMode       string   `json:"cgroup-mode,omitempty"`
+	CGroupParent      string   `json:"cgroup-parent,omitempty"`
+	CIDFile           string   `json:"cid-file,omitempty"`
+	ConmonPIDFile     string   `json:"infra-conmon-pidfile,omitempty"`
+	CPUPeriod         uint64   `json:"cpu-period,omitempty"`
+	CPUQuota          int64    `json:"cpu-quota,omitempty"`
+	CPURTPeriod       uint64   `json:"cpu-rt-period,omitempty"`
+	CPURTRuntime      int64    `json:"cpu-rt-runtime,omitempty"`
+	CPUShares         uint64   `json:"cpu-shares,omitempty"`
+	CPUS              float64  `json:"cpus,omitempty"`
+	CPUSetCPUs        string   `json:"cpuset-cpus,omitempty"`
+	CPUSetMems        string   `json:"cpu-set-mems,omitempty"`
+	Devices           []string `json:"devices,omitempty"`
+	DeviceCGroupRule  []string `json:"device-cgroup-rule,omitempty"`
+	DeviceReadBPs     []string `json:"device-read-bp,omitempty"`
+	DeviceReadIOPs    []string `json:"device-read-io,omitempty"`
+	DeviceWriteBPs    []string `json:"device-write-bp,omitempty"`
+	DeviceWriteIOPs   []string `json:"device-write-io,omitempty"`
+	Entrypoint        *string  `json:"centrypoint,omitempty"`
+	Env               []string `json:"env,omitempty"`
+	EnvHost           bool     `json:"env-host,omitempty"`
+	EnvFile           []string `json:"env-file,omitempty"`
+	Expose            []string `json:"expose,omitempty"`
+	GIDMap            []string `json:"gid-map,omitempty"`
+	GroupAdd          []string `json:"group-add,omitempty"`
+	HealthCmd         string   `json:"health-cmd,omitempty"`
+	HealthInterval    string   `json:"health-interval,omitempty"`
+	HealthRetries     uint     `json:"health-retries,omitempty"`
+	HealthStartPeriod string   `json:"health-start-period,omitempty"`
+	HealthTimeout     string   `json:"health-timeout,omitempty"`
+	Hostname          string   `json:"hostname,omitempty"`
+	HTTPProxy         bool
+	ImageVolume       string
+	Init              bool
+	InitContainerType string
+	InitPath          string
+	Interactive       bool
+	IPC               string
+	KernelMemory      string
+	Label             []string
+	LabelFile         []string
+	LogDriver         string
+	LogOptions        []string
+	Memory            string
+	MemoryReservation string
+	MemorySwap        string
+	MemorySwappiness  int64
+	Name              string `json:"infra-name,omitempty"`
+	NoHealthCheck     bool
+	OOMKillDisable    bool
+	OOMScoreAdj       int
+	Arch              string
+	OS                string
+	Variant           string
+	PID               string
+	PIDsLimit         *int64
+	Platform          string
+	Pod               string `json:"pod,omitempty"`
+	PodIDFile         string
+	Personality       string
+	PreserveFDs       uint
+	Privileged        bool
+	PublishAll        bool
+	Pull              string `json:"pull,omitempty"`
+	Quiet             bool
+	ReadOnly          bool
+	ReadOnlyTmpFS     bool
+	Restart           string
+	Replace           bool
+	Requires          []string
+	Rm                bool
+	RootFS            bool
+	Secrets           []string
+	SecurityOpt       []string
+	SdNotifyMode      string
+	ShmSize           string
+	SignaturePolicy   string
+	StopSignal        string
+	StopTimeout       uint
+	StorageOpt        []string
+	SubUIDName        string
+	SubGIDName        string
+	Sysctl            []string
+	Systemd           string
+	Timeout           uint
+	TmpFS             []string
+	TTY               bool
+	Timezone          string
+	Umask             string
+	UIDMap            []string
+	Ulimit            []string
+	User              string
+	UserNS            string
+	UTS               string
+	Mount             []string
+	Volume            []string
+	VolumesFrom       []string
+	Workdir           string
+	SeccompPolicy     string
+	PidFile           string
+	IsInfra           bool `json:"infra,omitempty"`
+
+	Net *NetOptions
+
+	CgroupConf []string
 }
 
 type PodCreateReport struct {
@@ -149,19 +268,7 @@ func (p *PodCreateOptions) CPULimits() *specs.LinuxCPU {
 	return cpu
 }
 
-func setNamespaces(p *PodCreateOptions) ([4]specgen.Namespace, error) {
-	allNS := [4]specgen.Namespace{}
-	if p.Pid != "" {
-		pid, err := specgen.ParseNamespace(p.Pid)
-		if err != nil {
-			return [4]specgen.Namespace{}, err
-		}
-		allNS[0] = pid
-	}
-	return allNS, nil
-}
-
-func (p *PodCreateOptions) ToPodSpecGen(s *specgen.PodSpecGenerator) error {
+func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.PodSpecGenerator, error) {
 	// Basic Config
 	s.Name = p.Name
 	s.Hostname = p.Hostname
@@ -174,32 +281,26 @@ func (p *PodCreateOptions) ToPodSpecGen(s *specgen.PodSpecGenerator) error {
 		s.InfraConmonPidFile = p.InfraConmonPidFile
 	}
 	s.InfraImage = p.InfraImage
-	s.InfraName = p.InfraName
 	s.SharedNamespaces = p.Share
 	s.PodCreateCommand = p.CreateCommand
 
 	// Networking config
-	s.NetNS = p.Net.Network
-	s.StaticIP = p.Net.StaticIP
-	s.StaticMAC = p.Net.StaticMAC
-	s.PortMappings = p.Net.PublishPorts
-	s.CNINetworks = p.Net.CNINetworks
-	s.NetworkOptions = p.Net.NetworkOptions
-	if p.Net.UseImageResolvConf {
-		s.NoManageResolvConf = true
-	}
-	s.DNSServer = p.Net.DNSServers
-	s.DNSSearch = p.Net.DNSSearch
-	s.DNSOption = p.Net.DNSOptions
-	s.NoManageHosts = p.Net.NoHosts
-	s.HostAdd = p.Net.AddHosts
 
-	namespaces, err := setNamespaces(p)
-	if err != nil {
-		return err
-	}
-	if !namespaces[0].IsDefault() {
-		s.Pid = namespaces[0]
+	if p.Net != nil {
+		s.NetNS = p.Net.Network
+		s.StaticIP = p.Net.StaticIP
+		s.StaticMAC = p.Net.StaticMAC
+		s.PortMappings = p.Net.PublishPorts
+		s.CNINetworks = p.Net.CNINetworks
+		s.NetworkOptions = p.Net.NetworkOptions
+		if p.Net.UseImageResolvConf {
+			s.NoManageResolvConf = true
+		}
+		s.DNSServer = p.Net.DNSServers
+		s.DNSSearch = p.Net.DNSSearch
+		s.DNSOption = p.Net.DNSOptions
+		s.NoManageHosts = p.Net.NoHosts
+		s.HostAdd = p.Net.AddHosts
 	}
 
 	// Cgroup
@@ -218,8 +319,12 @@ func (p *PodCreateOptions) ToPodSpecGen(s *specgen.PodSpecGenerator) error {
 			s.CPUQuota = *cpuDat.Quota
 		}
 	}
+<<<<<<< HEAD
 	s.Userns = p.Userns
 	return nil
+=======
+	return &s, nil
+>>>>>>> 7a74a7544 (InfraContainer Rework)
 }
 
 type PodPruneOptions struct {

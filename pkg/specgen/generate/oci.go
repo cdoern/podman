@@ -191,7 +191,16 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 
 	canMountSys := canMountSys(isRootless, isNewUserns, s)
 
-	if s.Privileged && canMountSys {
+	if isRootless && s.IsInfra {
+		g.RemoveMount("/dev/pts")
+		devPts := spec.Mount{
+			Destination: "/dev/pts",
+			Type:        "devpts",
+			Source:      "devpts",
+			Options:     []string{"private", "nosuid", "noexec", "newinstance", "ptmxmode=0666", "mode=0620"},
+		}
+		g.AddMount(devPts)
+	} else if s.Privileged && canMountSys {
 		cgroupPerm = "rw"
 		g.RemoveMount("/sys")
 		sysMnt := spec.Mount{
@@ -241,7 +250,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 			gid5Available = false
 		}
 	}
-	if !gid5Available {
+	if !gid5Available && !s.IsInfra {
 		// If we have no GID mappings, the gid=5 default option would fail, so drop it.
 		g.RemoveMount("/dev/pts")
 		devPts := spec.Mount{
@@ -255,7 +264,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 
 	inUserNS := isRootless || isNewUserns
 
-	if inUserNS && s.IpcNS.IsHost() {
+	if inUserNS && s.IpcNS.IsHost() && !s.IsInfra {
 		g.RemoveMount("/dev/mqueue")
 		devMqueue := spec.Mount{
 			Destination: "/dev/mqueue",
@@ -265,7 +274,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 		}
 		g.AddMount(devMqueue)
 	}
-	if inUserNS && s.PidNS.IsHost() {
+	if inUserNS && s.PidNS.IsHost() && !s.IsInfra {
 		g.RemoveMount("/proc")
 		procMount := spec.Mount{
 			Destination: "/proc",
@@ -300,6 +309,9 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 	g.AddProcessEnv("container", "podman")
 
 	g.Config.Linux.Resources = s.ResourceLimits
+	if g.Config.Linux.Resources == nil {
+		g.Config.Linux.Resources = &spec.LinuxResources{}
+	}
 
 	// Devices
 	if s.Privileged {
