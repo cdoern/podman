@@ -2,6 +2,7 @@ package generate
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 
@@ -181,6 +182,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 	if err != nil {
 		return nil, err
 	}
+	g.InitConfigLinuxResourcesCPU()
 	// Remove the default /dev/shm mount to ensure we overwrite it
 	g.RemoveMount("/dev/shm")
 	g.HostSpecific = true
@@ -297,6 +299,7 @@ func SpecGenToOCI(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Runt
 	g.AddProcessEnv("container", "podman")
 
 	g.Config.Linux.Resources = s.ResourceLimits
+	fmt.Println(g.Config.Linux.Resources.CPU)
 
 	// Devices
 	if s.Privileged {

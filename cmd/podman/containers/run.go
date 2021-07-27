@@ -178,9 +178,11 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	cliVals.PreserveFDs = runOpts.PreserveFDs
 	s := specgen.NewSpecGenerator(imageName, cliVals.RootFS)
+	fmt.Println(cliVals.CPUSetCPUs)
 	if err := common.FillOutSpecGen(s, &cliVals, args); err != nil {
 		return err
 	}
+	fmt.Println(s.ResourceLimits.CPU.Cpus)
 	s.RawImageName = rawImageName
 	runOpts.Spec = s
 

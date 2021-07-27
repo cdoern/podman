@@ -2,6 +2,7 @@ package generate
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -185,7 +186,8 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 	}
 
 	// If caller did not specify Pids Limits load default
-	if s.ResourceLimits == nil || s.ResourceLimits.Pids == nil {
+	fmt.Println(s.ResourceLimits.CPU)
+	if s.ResourceLimits == nil && s.ResourceLimits.Pids == nil {
 		if s.CgroupsMode != "disabled" {
 			limit := rtc.PidsLimit()
 			if limit != 0 {

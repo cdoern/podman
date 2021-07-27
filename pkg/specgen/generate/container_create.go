@@ -129,6 +129,9 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		return nil, err
 	}
 
+	if s.ResourceLimits != nil && s.ResourceLimits.CPU != nil {
+		options = append(options, libpod.WithCPU(s.ResourceLimits.CPU))
+	}
 	opts, err := createContainerOptions(ctx, rt, s, pod, finalVolumes, finalOverlays, imageData, command)
 	if err != nil {
 		return nil, err

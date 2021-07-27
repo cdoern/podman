@@ -2,6 +2,7 @@ package libpod
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -167,6 +168,7 @@ func (r *Runtime) initContainerVariables(rSpec *spec.Spec, config *ContainerConf
 	if err := JSONDeepCopy(rSpec, ctr.config.Spec); err != nil {
 		return nil, errors.Wrapf(err, "error copying runtime spec while creating container")
 	}
+	fmt.Println(ctr.config.Spec.Linux.Resources.CPU)
 	ctr.config.CreatedTime = time.Now()
 
 	ctr.state.BindMounts = make(map[string]string)

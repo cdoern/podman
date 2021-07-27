@@ -1754,6 +1754,30 @@ func WithPidFile(pidFile string) CtrCreateOption {
 	}
 }
 
+func WithCPU(in *specs.LinuxCPU) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		if ctr.config.Spec != nil && ctr.config.Spec.Linux != nil {
+			if ctr.config.Spec.Linux.Resources != nil {
+				ctr.config.Spec.Linux.Resources.CPU = in
+			} else {
+				ctr.config.Spec.Linux.Resources = new(specs.LinuxResources)
+				ctr.config.Spec.Linux.Resources.CPU = in
+			}
+
+		} else {
+			ctr.config.Spec = new(specs.Spec)
+			ctr.config.Spec.Linux = new(specs.Linux)
+			ctr.config.Spec.Linux.Resources = new(specs.LinuxResources)
+			ctr.config.Spec.Linux.Resources.CPU = in
+
+		}
+		return nil
+	}
+}
+
 // Pod Creation Options
 
 // WithInfraImage sets the infra image for libpod.
