@@ -222,6 +222,7 @@ func setNamespaces(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts) error
 		if err != nil {
 			return err
 		}
+
 	}
 	if c.Net != nil {
 		s.NetNS = c.Net.Network
@@ -259,6 +260,9 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts, args
 		}
 	}
 
+	if err := setNamespaces(s, c); err != nil {
+		return err
+	}
 	userNS := ns.UsernsMode(c.UserNS)
 	s.IDMappings, err = util.ParseIDMapping(userNS, c.UIDMap, c.GIDMap, c.SubUIDName, c.SubGIDName)
 	if err != nil {
@@ -300,10 +304,6 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCLIOpts, args
 		return err
 	}
 	s.Expose = expose
-
-	if err := setNamespaces(s, c); err != nil {
-		return err
-	}
 
 	if sig := c.StopSignal; len(sig) > 0 {
 		stopSignal, err := util.ParseSignal(sig)
@@ -868,6 +868,8 @@ func MapSpec(p *specgen.PodSpecGenerator) (*specgen.SpecGenerator, error) {
 	if p.InfraImage != "k8s.gcr.io/pause:3.5" {
 		p.InfraContainerSpec.Image = p.InfraImage
 	}
+
+	//	p.InfraContainerSpec.UserNS = p.Userns
 
 	//if len(p.InfraContainerSpec.ConmonPidFile) > 0 {
 	//	libpod.WithInfraConmonPidFile(p.InfraContainerSpec.ConmonPidFile, p.InfraContainerSpec)

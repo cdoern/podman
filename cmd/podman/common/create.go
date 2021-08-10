@@ -227,14 +227,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCLIOpts, isInfr
 		)
 		_ = cmd.RegisterFlagCompletionFunc(exposeFlagName, completion.AutocompleteNone)
 
-		gidmapFlagName := "gidmap"
-		createFlags.StringSliceVar(
-			&cf.GIDMap,
-			gidmapFlagName, []string{},
-			"GID map to use for the user namespace",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(gidmapFlagName, completion.AutocompleteNone)
-
 		groupAddFlagName := "group-add"
 		createFlags.StringSliceVar(
 			&cf.GroupAdd,
@@ -565,21 +557,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCLIOpts, isInfr
 		)
 		_ = cmd.RegisterFlagCompletionFunc(stopTimeoutFlagName, completion.AutocompleteNone)
 
-		subgidnameFlagName := "subgidname"
-		createFlags.StringVar(
-			&cf.SubUIDName,
-			subgidnameFlagName, "",
-			"Name of range listed in /etc/subgid for use in user namespace",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(subgidnameFlagName, completion.AutocompleteSubgidName)
-
-		subuidnameFlagName := "subuidname"
-		createFlags.StringVar(
-			&cf.SubGIDName,
-			subuidnameFlagName, "",
-			"Name of range listed in /etc/subuid for use in user namespace",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(subuidnameFlagName, completion.AutocompleteSubuidName)
 		sysctlFlagName := "sysctl"
 		createFlags.StringSliceVar(
 			&cf.Sysctl,
@@ -643,14 +620,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCLIOpts, isInfr
 		)
 		_ = cmd.RegisterFlagCompletionFunc(umaskFlagName, completion.AutocompleteNone)
 
-		uidmapFlagName := "uidmap"
-		createFlags.StringSliceVar(
-			&cf.UIDMap,
-			uidmapFlagName, []string{},
-			"UID map to use for the user namespace",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(uidmapFlagName, completion.AutocompleteNone)
-
 		ulimitFlagName := "ulimit"
 		createFlags.StringSliceVar(
 			&cf.Ulimit,
@@ -666,13 +635,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCLIOpts, isInfr
 			"Username or UID (format: <name|uid>[:<group|gid>])",
 		)
 		_ = cmd.RegisterFlagCompletionFunc(userFlagName, AutocompleteUserFlag)
-
-		usernsFlagName := "userns"
-		createFlags.String(
-			usernsFlagName, os.Getenv("PODMAN_USERNS"),
-			"User namespace to use",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(usernsFlagName, AutocompleteUserNamespace)
 
 		utsFlagName := "uts"
 		createFlags.String(
@@ -752,6 +714,45 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCLIOpts, isInfr
 			`If a container with the same name exists, replace it`,
 		)
 	}
+
+	subgidnameFlagName := "subgidname"
+	createFlags.StringVar(
+		&cf.SubUIDName,
+		subgidnameFlagName, "",
+		"Name of range listed in /etc/subgid for use in user namespace",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(subgidnameFlagName, completion.AutocompleteSubgidName)
+
+	subuidnameFlagName := "subuidname"
+	createFlags.StringVar(
+		&cf.SubGIDName,
+		subuidnameFlagName, "",
+		"Name of range listed in /etc/subuid for use in user namespace",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(subuidnameFlagName, completion.AutocompleteSubuidName)
+
+	gidmapFlagName := "gidmap"
+	createFlags.StringSliceVar(
+		&cf.GIDMap,
+		gidmapFlagName, []string{},
+		"GID map to use for the user namespace",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(gidmapFlagName, completion.AutocompleteNone)
+
+	uidmapFlagName := "uidmap"
+	createFlags.StringSliceVar(
+		&cf.UIDMap,
+		uidmapFlagName, []string{},
+		"UID map to use for the user namespace",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(uidmapFlagName, completion.AutocompleteNone)
+
+	usernsFlagName := "userns"
+	createFlags.String(
+		usernsFlagName, os.Getenv("PODMAN_USERNS"),
+		"User namespace to use",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(usernsFlagName, AutocompleteUserNamespace)
 
 	cgroupParentFlagName := "cgroup-parent"
 	createFlags.StringVar(

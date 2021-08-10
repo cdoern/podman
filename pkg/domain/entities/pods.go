@@ -125,7 +125,7 @@ type PodCreateOptions struct {
 	Pid                string   `json:"pid,omitempty"`
 	Cpus               float64  `json:"cpus,omitempty"`
 	CpusetCpus         string   `json:"cpuset-Cpus,omitempty"`
-	Userns             specgen.Namespace
+	Userns             string   `json:"userns"`
 }
 
 type ContainerCLIOpts struct {
@@ -229,7 +229,7 @@ type ContainerCLIOpts struct {
 	UIDMap            []string
 	Ulimit            []string
 	User              string
-	UserNS            string
+	UserNS            string `json:"userns"`
 	UTS               string
 	Mount             []string
 	Volume            []string
@@ -319,12 +319,12 @@ func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.Pod
 			s.CPUQuota = *cpuDat.Quota
 		}
 	}
-<<<<<<< HEAD
-	s.Userns = p.Userns
-	return nil
-=======
+	var err error
+	s.Userns, err = specgen.ParseNamespace(p.Userns)
+	if err != nil {
+		return &s, err
+	}
 	return &s, nil
->>>>>>> 7a74a7544 (InfraContainer Rework)
 }
 
 type PodPruneOptions struct {

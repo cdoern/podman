@@ -188,7 +188,7 @@ func CompleteSpec(ctx context.Context, r *libpod.Runtime, s *specgen.SpecGenerat
 		s.SeccompProfilePath = p
 	}
 
-	if len(s.User) == 0 && inspectData != nil {
+	if len(s.User) == 0 && inspectData != nil && !s.IsInfra {
 		s.User = inspectData.Config.User
 	}
 	if err := finishThrottleDevices(s); err != nil {

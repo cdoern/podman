@@ -52,17 +52,15 @@ func createPodOptions(p *specgen.PodSpecGenerator, rt *libpod.Runtime, infraSpec
 	)
 	if !p.NoInfra { //&& infraSpec != nil {
 		options = append(options, libpod.WithInfraContainer(p.InfraContainerSpec))
-		nsOptions, err := GetNamespaceOptions(p.SharedNamespaces, p.NetNS.IsHost())
+		nsOptions, err := GetNamespaceOptions(p.SharedNamespaces, p.InfraContainerSpec.NetNS.IsHost())
 		if err != nil {
 			return nil, err
 		}
 		options = append(options, nsOptions...)
 		// Use pod user and infra userns only when --userns is not set to host
-		if !p.Userns.IsHost() {
+		if !p.InfraContainerSpec.UserNS.IsHost() && !p.InfraContainerSpec.UserNS.IsDefault() {
 			options = append(options, libpod.WithPodUser())
-			options = append(options, libpod.WithPodUserns(p.Userns))
 		}
-
 		// Make our exit command
 		storageConfig := rt.StorageConfig()
 		runtimeConfig, err := rt.GetConfig()

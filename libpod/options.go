@@ -2175,20 +2175,3 @@ func WithVolatile() CtrCreateOption {
 		return nil
 	}
 }
-
-// WithPodUserns sets the userns for the infra container in a pod.
-func WithPodUserns(userns specgen.Namespace) PodCreateOption {
-	return func(pod *Pod) error {
-		if pod.valid {
-			return define.ErrPodFinalized
-		}
-
-		if !pod.config.InfraContainer.HasInfraContainer {
-			return errors.Wrapf(define.ErrInvalidArg, "cannot configure pod userns as no infra container is being created")
-		}
-
-		pod.config.InfraContainer.Userns = userns
-
-		return nil
-	}
-}

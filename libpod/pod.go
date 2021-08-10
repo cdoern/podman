@@ -186,6 +186,28 @@ func (p *Pod) PidMode() string {
 	return ""
 }
 
+// PidMode returns the PID mode given by the user ex: pod, private...
+func (p *Pod) UserMode() string {
+	infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
+	if err != nil {
+		return ""
+	}
+	conf := infra.Config()
+	ctrSpec := conf.Spec
+	if ctrSpec != nil && ctrSpec.Linux != nil {
+		for _, ns := range ctrSpec.Linux.Namespaces {
+			if ns.Type == specs.UserNamespace {
+				if ns.Path != "" {
+					return fmt.Sprintf("ns:%s", ns.Path)
+				}
+				return "private"
+			}
+		}
+		return "host"
+	}
+	return ""
+}
+
 // Labels returns the pod's labels
 func (p *Pod) Labels() map[string]string {
 	labels := make(map[string]string)

@@ -164,10 +164,10 @@ func create(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	createOptions.Userns, err = specgen.ParseUserNamespace(userns)
-	if err != nil {
-		return err
-	}
+	//createOptions.Userns, err = specgen.ParseUserNamespace(userns)
+	//if err != nil {
+	//	return err
+	//}
 
 	if cmd.Flag("pod-id-file").Changed {
 		podIDFD, err = util.OpenExclusiveFile(podIDFile)
@@ -297,6 +297,7 @@ func MapOptions(infraOptions entities.ContainerCLIOpts, createOpts entities.PodC
 	toReturn.InfraImage = img
 	toReturn.InfraName = infraOptions.Name
 	toReturn.Hostname = infraOptions.Hostname
+	toReturn.Userns = infraOptions.UserNS
 	return toReturn
 }
 func replacePod(name string) error {

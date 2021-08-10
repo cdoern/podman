@@ -252,7 +252,7 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 			val = fmt.Sprintf("slirp4netns:%s", s.NetNS.Value)
 		}
 		if s.IsInfra {
-			toReturn = append(toReturn, libpod.WithNetNS(portMappings, false, val, s.CNINetworks))
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, val, s.CNINetworks))
 		} else {
 			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, val, s.CNINetworks))
 		}
@@ -264,7 +264,7 @@ func namespaceOptions(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.
 			return nil, err
 		}
 		if s.IsInfra {
-			toReturn = append(toReturn, libpod.WithNetNS(portMappings, false, "bridge", s.CNINetworks))
+			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, "bridge", s.CNINetworks))
 		} else {
 			toReturn = append(toReturn, libpod.WithNetNS(portMappings, postConfigureNetNS, "bridge", s.CNINetworks))
 		}

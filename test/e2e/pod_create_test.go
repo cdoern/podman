@@ -640,7 +640,7 @@ ENTRYPOINT ["sleep","99999"]
 		Expect(session).Should(Exit(0))
 		u, err := user.Current()
 		Expect(err).To(BeNil())
-		ok, _ = session.GrepString(u.Name)
+		ok, _ = session.GrepString(u.Uid)
 		Expect(ok).To(BeTrue())
 
 		// root owns /usr

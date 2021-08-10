@@ -175,6 +175,18 @@ func replaceContainer(name string) error {
 }
 
 func CreateInit(c *cobra.Command, vals entities.ContainerCLIOpts, isInfra bool) (entities.ContainerCLIOpts, error) {
+	vals.UserNS = c.Flag("userns").Value.String()
+	// if user did not modify --userns flag and did turn on
+	// uid/gid mappings, set userns flag to "private"
+	if !c.Flag("userns").Changed && vals.UserNS == "host" {
+		if len(vals.UIDMap) > 0 ||
+			len(vals.GIDMap) > 0 ||
+			vals.SubUIDName != "" ||
+			vals.SubGIDName != "" {
+			vals.UserNS = "private"
+		}
+	}
+
 	if !isInfra {
 		if c.Flag("shm-size").Changed {
 			vals.ShmSize = c.Flag("shm-size").Value.String()
@@ -184,17 +196,6 @@ func CreateInit(c *cobra.Command, vals entities.ContainerCLIOpts, isInfra bool) 
 		}
 		if c.Flag("cpu-quota").Changed && c.Flag("cpus").Changed {
 			return vals, errors.Errorf("--cpu-quota and --cpus cannot be set together")
-		}
-		vals.UserNS = c.Flag("userns").Value.String()
-		// if user did not modify --userns flag and did turn on
-		// uid/gid mappings, set userns flag to "private"
-		if !c.Flag("userns").Changed && vals.UserNS == "host" {
-			if len(vals.UIDMap) > 0 ||
-				len(vals.GIDMap) > 0 ||
-				vals.SubUIDName != "" ||
-				vals.SubGIDName != "" {
-				vals.UserNS = "private"
-			}
 		}
 		vals.IPC = c.Flag("ipc").Value.String()
 		vals.UTS = c.Flag("uts").Value.String()
@@ -237,15 +238,14 @@ func CreateInit(c *cobra.Command, vals entities.ContainerCLIOpts, isInfra bool) 
 		if c.Flag("cgroups").Changed && vals.CGroupsMode == "split" && registry.IsRemote() {
 			return vals, errors.Errorf("the option --cgroups=%q is not supported in remote mode", vals.CGroupsMode)
 		}
-	}
 
+		if c.Flag("pod").Changed && !strings.HasPrefix(c.Flag("pod").Value.String(), "new:") && c.Flag("userns").Changed {
+			return vals, errors.Errorf("--userns and --pod cannot be set together")
+		}
+	}
 	if (c.Flag("dns").Changed || c.Flag("dns-opt").Changed || c.Flag("dns-search").Changed) && vals.Net != nil && (vals.Net.Network.NSMode == specgen.NoNetwork || vals.Net.Network.IsContainer()) {
 		return vals, errors.Errorf("conflicting options: dns and the network mode.")
 	}
-	if c.Flag("pod").Changed && !strings.HasPrefix(c.Flag("pod").Value.String(), "new:") && c.Flag("userns").Changed {
-		return errors.Errorf("--userns and --pod cannot be set together")
-	}
-
 	noHosts, err := c.Flags().GetBool("no-hosts")
 	if err != nil {
 		return vals, err
@@ -321,11 +321,6 @@ func createPodIfNecessary(s *specgen.SpecGenerator, netOpts *entities.NetOptions
 		return nil, errors.Errorf("new pod name must be at least one character")
 	}
 
-	userns, err := specgen.ParseUserNamespace(cliVals.UserNS)
-	if err != nil {
-		return nil, err
-	}
-
 	createOptions := entities.PodCreateOptions{
 		Name:          podName,
 		Infra:         true,
@@ -335,7 +330,7 @@ func createPodIfNecessary(s *specgen.SpecGenerator, netOpts *entities.NetOptions
 		Cpus:          cliVals.CPUS,
 		CpusetCpus:    cliVals.CPUSetCPUs,
 		Pid:           cliVals.PID,
-		Userns:        userns,
+		Userns:        cliVals.UserNS,
 	}
 	// Unset config values we passed to the pod to prevent them being used twice for the container and pod.
 	s.ContainerBasicConfig.Hostname = ""
