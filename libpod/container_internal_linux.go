@@ -1672,10 +1672,14 @@ func (c *Container) makeBindMounts() error {
 					return errors.Wrapf(err, "error setting timezone for container %s", c.ID())
 				}
 			}
-			localtimePath, err := c.copyTimezoneFile(zonePath)
+			localtimePath, zonefilePath, err := c.copyTimezoneFile(zonePath)
 			if err != nil {
 				return errors.Wrapf(err, "error setting timezone for container %s", c.ID())
 			}
+			fmt.Println(localtimePath)
+			zonePath, err = filepath.EvalSymlinks(localtimePath)
+			fmt.Println(zonePath)
+			c.state.BindMounts[zonePath] = zonefilePath
 			c.state.BindMounts["/etc/localtime"] = localtimePath
 		}
 	}
@@ -2457,36 +2461,53 @@ func (c *Container) getOCICgroupPath() (string, error) {
 	}
 }
 
-func (c *Container) copyTimezoneFile(zonePath string) (string, error) {
+func (c *Container) copyTimezoneFile(zonePath string) (string, string, error) {
 	var localtimeCopy string = filepath.Join(c.state.RunDir, "localtime")
+	var zonefileCopy string = filepath.Join((c.state.RunDir), "zonefile")
 	file, err := os.Stat(zonePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if file.IsDir() {
-		return "", errors.New("Invalid timezone: is a directory")
+		return "", "", errors.New("Invalid timezone: is a directory")
 	}
 	src, err := os.Open(zonePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer src.Close()
 	dest, err := os.Create(localtimeCopy)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer dest.Close()
+	dest2, err := os.Create(zonefileCopy)
+	if err != nil {
+		return "", "", err
+	}
+	defer dest2.Close()
+	fmt.Println(src.Name())
 	_, err = io.Copy(dest, src)
 	if err != nil {
-		return "", err
+		return "", "", err
+	}
+	_, err = io.Copy(dest2, src)
+	if err != nil {
+		return "", "", err
 	}
 	if err := label.Relabel(localtimeCopy, c.config.MountLabel, false); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := dest.Chown(c.RootUID(), c.RootGID()); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return localtimeCopy, err
+	if err := label.Relabel(zonefileCopy, c.config.MountLabel, false); err != nil {
+		return "", "", err
+	}
+	if err := dest2.Chown(c.RootUID(), c.RootGID()); err != nil {
+		return "", "", err
+	}
+	return localtimeCopy, zonefileCopy, err
 }
 
 func (c *Container) cleanupOverlayMounts() error {
