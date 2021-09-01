@@ -132,12 +132,7 @@ func create(cmd *cobra.Command, args []string) error {
 		createOptions.Share = nil
 	} else {
 		// reassign certain optios for lbpod api, these need to be populated in spec
-		createOptions.InfraConmonPidFile = infraOptions.ConmonPIDFile
-		createOptions.InfraName = infraOptions.Name
-		createOptions.Hostname = infraOptions.Hostname
-		createOptions.Cpus = infraOptions.CPUS
-		createOptions.CpusetCpus = infraOptions.CPUSetCPUs
-		createOptions.Pid = infraOptions.PID
+		MapOptions()
 		flags := cmd.Flags()
 		infraOptions.Net, err = common.NetFlagsToNetOptions(nil, *flags, false)
 		if err != nil {
@@ -290,4 +285,14 @@ func replacePod(name string) error {
 		Ignore: true, // ignore if pod doesn't exist
 	}
 	return removePods([]string{name}, rmOptions, false)
+}
+
+func MapOptions() {
+	createOptions.Cpus = infraOptions.CPUS
+	createOptions.CpusetCpus = infraOptions.CPUSetCPUs
+	createOptions.Hostname = infraOptions.Hostname
+	createOptions.InfraConmonPidFile = infraOptions.ConmonPIDFile
+	createOptions.InfraName = infraOptions.Name
+	createOptions.Pid = infraOptions.PID
+	createOptions.Volume = infraOptions.Volume
 }

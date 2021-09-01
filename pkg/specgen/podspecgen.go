@@ -154,6 +154,8 @@ type PodNetworkConfig struct {
 	// NetworkOptions are additional options for each network
 	// Optional.
 	NetworkOptions map[string][]string `json:"network_options,omitempty"`
+	// Volume contains the user specified volumes to be bind mounted into the container
+	Volume []string `json:"pod_volumes,omitempty"`
 }
 
 // PodCgroupConfig contains configuration options about a pod's cgroups.

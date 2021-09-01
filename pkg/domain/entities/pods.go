@@ -131,6 +131,7 @@ type PodCreateOptions struct {
 	Cpus               float64
 	CpusetCpus         string
 	Userns             specgen.Namespace
+	Volume             []string
 }
 
 type ContainerCreateOptions struct {
@@ -281,6 +282,9 @@ func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.Pod
 	out, err := specgen.ParseNamespace(p.Pid)
 	if err != nil {
 		return nil, err
+	}
+	if len(p.Volume) > 0 {
+		s.Volume = p.Volume
 	}
 	s.Pid = out
 	s.Hostname = p.Hostname
