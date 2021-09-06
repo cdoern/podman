@@ -295,4 +295,5 @@ func MapOptions() {
 	createOptions.InfraName = infraOptions.Name
 	createOptions.Pid = infraOptions.PID
 	createOptions.Volume = infraOptions.Volume
+	createOptions.VolumesFrom = infraOptions.VolumesFrom
 }

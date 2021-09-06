@@ -132,6 +132,7 @@ type PodCreateOptions struct {
 	CpusetCpus         string
 	Userns             specgen.Namespace
 	Volume             []string
+	VolumesFrom        []string
 }
 
 type ContainerCreateOptions struct {
