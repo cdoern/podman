@@ -144,14 +144,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		)
 		_ = cmd.RegisterFlagCompletionFunc(cpusetMemsFlagName, completion.AutocompleteNone)
 
-		deviceFlagName := "device"
-		createFlags.StringSliceVar(
-			&cf.Devices,
-			deviceFlagName, devices(),
-			"Add a host device to the container",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(deviceFlagName, completion.AutocompleteDefault)
-
 		deviceCgroupRuleFlagName := "device-cgroup-rule"
 		createFlags.StringSliceVar(
 			&cf.DeviceCGroupRule,
@@ -865,4 +857,12 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		"Mount volumes from the specified container(s)",
 	)
 	_ = cmd.RegisterFlagCompletionFunc(volumesFromFlagName, AutocompleteContainers)
+
+	deviceFlagName := "device"
+	createFlags.StringSliceVar(
+		&cf.Devices,
+		deviceFlagName, devices(),
+		"Add a host device to the container",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(deviceFlagName, completion.AutocompleteDefault)
 }

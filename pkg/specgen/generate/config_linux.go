@@ -79,7 +79,7 @@ func addPrivilegedDevices(g *generate.Generator) error {
 }
 
 // DevicesFromPath computes a list of devices
-func DevicesFromPath(g *generate.Generator, devicePath string) error {
+func DevicesFromPath(g *generate.Generator, devicePath string) (string, error) {
 	devs := strings.Split(devicePath, ":")
 	resolvedDevicePath := devs[0]
 	// check if it is a symbolic link
@@ -90,7 +90,7 @@ func DevicesFromPath(g *generate.Generator, devicePath string) error {
 	}
 	st, err := os.Stat(resolvedDevicePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if st.IsDir() {
 		found := false
@@ -106,7 +106,7 @@ func DevicesFromPath(g *generate.Generator, devicePath string) error {
 		}
 		if len(devs) > 2 {
 			if devmode != "" {
-				return errors.Wrapf(unix.EINVAL, "invalid device specification %s", devicePath)
+				return "", errors.Wrapf(unix.EINVAL, "invalid device specification %s", devicePath)
 			}
 			devmode = devs[2]
 		}
@@ -125,15 +125,14 @@ func DevicesFromPath(g *generate.Generator, devicePath string) error {
 			}
 			return nil
 		}); err != nil {
-			return err
+			return "", err
 		}
 		if !found {
-			return errors.Wrapf(unix.EINVAL, "no devices found in %s", devicePath)
+			return "", errors.Wrapf(unix.EINVAL, "no devices found in %s", devicePath)
 		}
-		return nil
+		return resolvedDevicePath, nil
 	}
-
-	return addDevice(g, strings.Join(append([]string{resolvedDevicePath}, devs[1:]...), ":"))
+	return resolvedDevicePath, addDevice(g, strings.Join(append([]string{resolvedDevicePath}, devs[1:]...), ":"))
 }
 
 func BlockAccessToKernelFilesystems(privileged, pidModeIsHost bool, mask, unmask []string, g *generate.Generator) {

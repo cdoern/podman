@@ -22,6 +22,7 @@ import (
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/cri-o/ocicni/pkg/ocicni"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/runtime-tools/generate"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -1806,6 +1807,17 @@ func WithInitCtrType(containerType string) CtrCreateOption {
 			return nil
 		}
 		return errors.Errorf("%s is invalid init container type", containerType)
+	}
+}
+
+// WithHostDevice adds the original host src to the config
+func WithHostDevice(dev []spec.LinuxDevice) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		ctr.config.DeviceHostSrc = dev
+		return nil
 	}
 }
 

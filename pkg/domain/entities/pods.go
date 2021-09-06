@@ -117,6 +117,7 @@ type PodSpec struct {
 type PodCreateOptions struct {
 	CGroupParent       string
 	CreateCommand      []string
+	Devices            []string
 	Hostname           string
 	Infra              bool
 	InfraImage         string

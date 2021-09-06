@@ -49,6 +49,10 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 	if config != nil && (len(config.NamedVolumes) > 0 || len(config.UserVolumes) > 0 || len(config.ImageVolumes) > 0 || len(config.OverlayVolumes) > 0) {
 		s.VolumesFrom = append(s.VolumesFrom, config.ID)
 	}
+
+	if config != nil && len(config.Spec.Linux.Devices) > 0 {
+		s.DevicesFrom = append(s.DevicesFrom, config.ID)
+	}
 	// Set defaults for unset namespaces
 	if s.PidNS.IsDefault() {
 		defaultNS, err := GetDefaultNamespaceMode("pid", rtc, pod)
@@ -166,6 +170,16 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		logrus.Debugf("setting container name %s", s.Name)
 		options = append(options, libpod.WithName(s.Name))
 	}
+	if len(s.DevicesFrom) > 0 {
+		for _, dev := range s.DevicesFrom {
+			ctr, err := rt.GetContainer(dev)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			devices := ctr.Config().DeviceHostSrc
+			s.Devices = append(s.Devices, devices...)
+		}
+	}
 	if len(s.Devices) > 0 {
 		opts = extractCDIDevices(s)
 		options = append(options, opts...)
@@ -173,6 +187,9 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 	runtimeSpec, err := SpecGenToOCI(ctx, s, rt, rtc, newImage, finalMounts, pod, command)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	if len(s.HostDeviceList) > 0 {
+		options = append(options, libpod.WithHostDevice(s.HostDeviceList))
 	}
 	return runtimeSpec, s, options, err
 }

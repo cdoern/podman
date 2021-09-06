@@ -8,6 +8,7 @@ import (
 	"github.com/containers/podman/v3/pkg/cgroups"
 	"github.com/containers/podman/v3/pkg/parallel"
 	"github.com/containers/podman/v3/pkg/rootless"
+	"github.com/containers/podman/v3/pkg/util"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -583,6 +584,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 	// container.
 	var infraConfig *define.InspectPodInfraConfig
 	var inspectMounts []define.InspectMount
+	var devices []define.InspectDevice
 	if p.state.InfraContainerID != "" {
 		infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
 		if err != nil {
@@ -600,6 +602,15 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		infraConfig.UserNS = p.UserNSMode()
 		namedVolumes, mounts := infra.sortUserVolumes(infra.Config().Spec)
 		inspectMounts, err = infra.GetInspectMounts(namedVolumes, infra.config.ImageVolumes, mounts)
+		if err != nil {
+			return nil, err
+		}
+		var nodes map[string]string
+		nodes, err = util.FindDeviceNodes()
+		if err != nil {
+			return nil, err
+		}
+		devices, err = infra.GetDevices(define.InspectContainerHostConfig{}, *infra.Spec(), nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -652,6 +663,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		CPUPeriod:        p.CPUPeriod(),
 		CPUQuota:         p.CPUQuota(),
 		Mounts:           inspectMounts,
+		Devices:          devices,
 	}
 
 	return &inspectData, nil
