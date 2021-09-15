@@ -45,6 +45,8 @@ var _ = Describe("Podman pod create", func() {
 	It("podman create pod", func() {
 		_, ec, podID := podmanTest.CreatePod(nil)
 		Expect(ec).To(Equal(0))
+		out := podmanTest.TestPodOptions()
+		Expect(out).To(BeTrue())
 
 		check := podmanTest.Podman([]string{"pod", "ps", "-q", "--no-trunc"})
 		check.WaitWithDefaultTimeout()

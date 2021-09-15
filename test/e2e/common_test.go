@@ -15,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containers/podman/v3/cmd/podman/common"
 	"github.com/containers/podman/v3/libpod/define"
 	"github.com/containers/podman/v3/pkg/cgroups"
+	"github.com/containers/podman/v3/pkg/domain/entities"
 	"github.com/containers/podman/v3/pkg/inspect"
 	"github.com/containers/podman/v3/pkg/rootless"
 	. "github.com/containers/podman/v3/test/utils"
@@ -564,6 +566,18 @@ func (p *PodmanTestIntegration) CreatePod(options map[string][]string) (*PodmanS
 	session := p.Podman(args)
 	session.WaitWithDefaultTimeout()
 	return session, session.ExitCode(), session.OutputToString()
+}
+
+func (p *PodmanTestIntegration) TestPodOptions() bool {
+	exampleOptions := entities.ContainerCreateOptions{PID: "ns:/proc/self/ns"}
+
+	podOptions := entities.PodCreateOptions{}
+	err := common.MapOptions(&exampleOptions, &podOptions)
+	if err != nil {
+		return false
+	}
+
+	return podOptions.Pid == "ns:/proc/self/ns"
 }
 
 func (p *PodmanTestIntegration) RunTopContainerInPod(name, pod string) *PodmanSessionIntegration {

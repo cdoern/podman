@@ -15,6 +15,21 @@ const sizeWithUnitFormat = "(format: `<number>[<unit>]`, where unit = b (bytes),
 
 var containerConfig = registry.PodmanConfig()
 
+// MapOptions takes the Container and Pod Create options, assigning the matching values back to podCreate for the purpose of the libpod API
+func MapOptions(containerCreate *entities.ContainerCreateOptions, podCreate *entities.PodCreateOptions) error {
+	contMarshal, err := json.Marshal(containerCreate)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(contMarshal, podCreate)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DefineCreateFlags declares and instantiates the container create flags
 func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, isInfra bool) {
 	createFlags := cmd.Flags()
 
