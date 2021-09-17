@@ -370,13 +370,7 @@ func (c *Container) generateInspectContainerConfig(spec *spec.Spec) *define.Insp
 func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, namedVolumes []*ContainerNamedVolume, mounts []spec.Mount) (*define.InspectContainerHostConfig, error) {
 	hostConfig := new(define.InspectContainerHostConfig)
 
-	logConfig := new(define.InspectLogConfig)
-	logConfig.Type = c.config.LogDriver
-	logConfig.Path = c.config.LogPath
-	logConfig.Size = units.HumanSize(float64(c.config.LogSize))
-	logConfig.Tag = c.config.LogTag
-
-	hostConfig.LogConfig = logConfig
+	c.GetLogConfig(hostConfig.LogConfig)
 
 	restartPolicy := new(define.InspectRestartPolicy)
 	restartPolicy.Name = c.config.RestartPolicy
@@ -884,4 +878,11 @@ func (c *Container) inHostPidNS() (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+func (c *Container) GetLogConfig(logConfig *define.InspectLogConfig) {
+	logConfig.Type = c.config.LogDriver
+	logConfig.Path = c.config.LogPath
+	logConfig.Size = units.HumanSize(float64(c.config.LogSize))
+	logConfig.Tag = c.config.LogTag
 }

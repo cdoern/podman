@@ -158,6 +158,7 @@ func create(cmd *cobra.Command, args []string) error {
 				return err
 			}
 		}
+
 		err = common.MapOptions(&infraOptions, &createOptions)
 		if err != nil {
 			return err
@@ -194,8 +195,8 @@ func create(cmd *cobra.Command, args []string) error {
 	if numCPU == 0 {
 		numCPU = runtime.NumCPU()
 	}
-	if createOptions.Cpus > float64(numCPU) {
-		createOptions.Cpus = float64(numCPU)
+	if infraOptions.CPUS > float64(numCPU) {
+		infraOptions.CPUS = float64(numCPU)
 	}
 	copy := infraOptions.CPUSetCPUs
 	cpuSet := infraOptions.CPUS
@@ -260,10 +261,10 @@ func create(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		podSpec.Volumes = podSpec.InfraContainerSpec.Volumes
-		podSpec.ImageVolumes = podSpec.InfraContainerSpec.ImageVolumes
-		podSpec.OverlayVolumes = podSpec.InfraContainerSpec.OverlayVolumes
-		podSpec.Mounts = podSpec.InfraContainerSpec.Mounts
+		err := common.MapSpec(podSpec, podSpec.InfraContainerSpec)
+		if err != nil {
+			return err
+		}
 	}
 	PodSpec := entities.PodSpec{PodSpecGen: *podSpec}
 	response, err := registry.ContainerEngine().PodCreate(context.Background(), PodSpec)

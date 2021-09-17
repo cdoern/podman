@@ -132,6 +132,7 @@ type PodCreateOptions struct {
 	CpusetCpus         string            `json:"cpuset_cpus,omitempty"`
 	Userns             specgen.Namespace `json:"-"`
 	Volume             []string          `json:"volume,omitempty"`
+	LogDriver          string            `json:"log_driver,omitempty"`
 }
 
 // PodLogsOptions describes the options to extract pod logs.
@@ -192,7 +193,7 @@ type ContainerCreateOptions struct {
 	KernelMemory      string
 	Label             []string
 	LabelFile         []string
-	LogDriver         string
+	LogDriver         string `json:"log_driver,omitempty"`
 	LogOptions        []string
 	Memory            string
 	MemoryReservation string

@@ -8,6 +8,7 @@ import (
 	"github.com/containers/podman/v3/cmd/podman/registry"
 	"github.com/containers/podman/v3/libpod/define"
 	"github.com/containers/podman/v3/pkg/domain/entities"
+	"github.com/containers/podman/v3/pkg/specgen"
 	"github.com/spf13/cobra"
 )
 
@@ -15,13 +16,27 @@ const sizeWithUnitFormat = "(format: `<number>[<unit>]`, where unit = b (bytes),
 
 var containerConfig = registry.PodmanConfig()
 
-// MapOptions takes the Container and Pod Create options, assigning the matching values back to podCreate for the purpose of the libpod API
-func MapOptions(containerCreate *entities.ContainerCreateOptions, podCreate *entities.PodCreateOptions) error {
-	contMarshal, err := json.Marshal(containerCreate)
+// MapSpec takes the Container and Pod specgens, assigning the matching entries
+func MapSpec(podSpec *specgen.PodSpecGenerator, infraSpec *specgen.SpecGenerator) error {
+	infraMarshal, err := json.Marshal(infraSpec)
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(contMarshal, podCreate)
+	err = json.Unmarshal(infraMarshal, podSpec)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// MapOptions takes the Container and Pod Create options, assigning the matching values back to podCreate for the purpose of the libpod API
+func MapOptions(containerCreate *entities.ContainerCreateOptions, podCreate *entities.PodCreateOptions) error {
+	infraMarshal, err := json.Marshal(containerCreate)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(infraMarshal, podCreate)
 	if err != nil {
 		return err
 	}
@@ -338,13 +353,6 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 			"Kernel memory limit "+sizeWithUnitFormat,
 		)
 		_ = cmd.RegisterFlagCompletionFunc(kernelMemoryFlagName, completion.AutocompleteNone)
-		logDriverFlagName := "log-driver"
-		createFlags.StringVar(
-			&cf.LogDriver,
-			logDriverFlagName, logDriver(),
-			"Logging driver for the container",
-		)
-		_ = cmd.RegisterFlagCompletionFunc(logDriverFlagName, AutocompleteLogDriver)
 
 		logOptFlagName := "log-opt"
 		createFlags.StringSliceVar(
@@ -880,4 +888,13 @@ func DefineCreateFlags(cmd *cobra.Command, cf *entities.ContainerCreateOptions, 
 		volumeDesciption,
 	)
 	_ = cmd.RegisterFlagCompletionFunc(volumeFlagName, AutocompleteVolumeFlag)
+
+	logDriverFlagName := "log-driver"
+	createFlags.StringVar(
+		&cf.LogDriver,
+		logDriverFlagName, logDriver(),
+		"Logging driver for the container",
+	)
+	_ = cmd.RegisterFlagCompletionFunc(logDriverFlagName, AutocompleteLogDriver)
+
 }

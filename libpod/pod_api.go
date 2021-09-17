@@ -583,6 +583,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 	// container.
 	var infraConfig *define.InspectPodInfraConfig
 	var inspectMounts []define.InspectMount
+	var inspectLogConfig *define.InspectLogConfig
 	if p.state.InfraContainerID != "" {
 		infra, err := p.runtime.GetContainer(p.state.InfraContainerID)
 		if err != nil {
@@ -603,6 +604,8 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		if err != nil {
 			return nil, err
 		}
+		infra.GetLogConfig(inspectLogConfig)
+		infraConfig.LogOptions = inspectLogConfig
 
 		if len(infra.Config().ContainerNetworkConfig.DNSServer) > 0 {
 			infraConfig.DNSServer = make([]string, 0, len(infra.Config().ContainerNetworkConfig.DNSServer))
@@ -652,6 +655,7 @@ func (p *Pod) Inspect() (*define.InspectPodData, error) {
 		CPUPeriod:        p.CPUPeriod(),
 		CPUQuota:         p.CPUQuota(),
 		Mounts:           inspectMounts,
+		LogOptions:       inspectLogConfig,
 	}
 
 	return &inspectData, nil

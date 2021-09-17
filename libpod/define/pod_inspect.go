@@ -59,6 +59,8 @@ type InspectPodData struct {
 	CPUSetCPUs string `json:"cpuset_cpus,omitempty"`
 	// Mounts contains volume related information for the pod
 	Mounts []InspectMount `json:"mounts,omitempty"`
+	// LogOptions contains the user specified log information
+	LogOptions *InspectLogConfig `json:"log_options,omitempty"`
 }
 
 // InspectPodInfraConfig contains the configuration of the pod's infra
@@ -109,6 +111,8 @@ type InspectPodInfraConfig struct {
 	PidNS string `json:"pid_ns,omitempty"`
 	// UserNS is the usernamespace that all the containers in the pod will join.
 	UserNS string `json:"userns,omitempty"`
+	// LogOptions contains all of the user specified log options
+	LogOptions *InspectLogConfig `json:"log_coptions,omitempty"`
 }
 
 // InspectPodContainerInfo contains information on a container in a pod.
