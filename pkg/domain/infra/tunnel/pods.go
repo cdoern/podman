@@ -188,6 +188,10 @@ func (ic *ContainerEngine) PodPrune(ctx context.Context, opts entities.PodPruneO
 	return pods.Prune(ic.ClientCtx, nil)
 }
 
+func (ic *ContainerEngine) PodAttach(ctx context.Context, id string, cid string) (*entities.PodAttachReport, error) {
+	return nil, nil
+}
+
 func (ic *ContainerEngine) PodCreate(ctx context.Context, specg entities.PodSpec) (*entities.PodCreateReport, error) {
 	return pods.CreatePodFromSpec(ic.ClientCtx, &specg)
 }

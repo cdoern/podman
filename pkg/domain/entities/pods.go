@@ -136,6 +136,11 @@ type PodCreateOptions struct {
 	Volume             []string          `json:"volume,omitempty"`
 }
 
+type PodAttachOptions struct {
+	ID  string `json:"id,omitempty"`
+	CID string `json:"container_id,omitempty"`
+}
+
 // PodLogsOptions describes the options to extract pod logs.
 type PodLogsOptions struct {
 	// Other fields are exactly same as ContainerLogOpts
@@ -259,6 +264,10 @@ type ContainerCreateOptions struct {
 	Net *NetOptions `json:"net,omitempty"`
 
 	CgroupConf []string
+}
+
+type PodAttachReport struct {
+	Id string
 }
 
 type PodCreateReport struct {

@@ -3141,6 +3141,10 @@ func (s *BoltState) RemovePodContainers(pod *Pod) error {
 	return nil
 }
 
+func (s *BoltState) AttachContainerToPod(ctr *Container, pod *Pod) error {
+	return nil
+}
+
 // AddContainerToPod adds the given container to an existing pod
 // The container will be added to the state and the pod
 func (s *BoltState) AddContainerToPod(pod *Pod, ctr *Container) error {

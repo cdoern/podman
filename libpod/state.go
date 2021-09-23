@@ -216,6 +216,9 @@ type State interface {
 	// Will fail if a dependency outside the pod is encountered.
 	// The pod must be part of the set namespace.
 	RemovePodContainers(pod *Pod) error
+
+	//
+	AttachContainerToPod(ctr *Container, pod *Pod) error
 	// AddContainerToPod adds a container to an existing pod.
 	// The container given will be added to the state and the pod.
 	// The container and its dependencies must be part of the given pod,

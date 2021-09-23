@@ -137,6 +137,27 @@ func (r *Runtime) NewPod(ctx context.Context, p specgen.PodSpecGenerator, option
 	return pod, nil
 }
 
+func (r *Runtime) AttachPod(ctr *Container, pod *Pod) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if !r.valid {
+		return define.ErrRuntimeStopped
+	}
+
+	newConf, err := r.state.GetContainerConfig(ctr.ID())
+	if err != nil {
+		return errors.Wrapf(err, "error retrieving container %s configuration from DB to remove", ctr.ID())
+	}
+	ctr.config = newConf
+
+	if err := r.state.AttachContainerToPod(ctr, pod); err != nil {
+		return err
+	}
+	return nil
+
+}
+
 // AddInfra adds the created infra container to the pod state
 func (r *Runtime) AddInfra(ctx context.Context, pod *Pod, infraCtr *Container) (*Pod, error) {
 	r.lock.Lock()

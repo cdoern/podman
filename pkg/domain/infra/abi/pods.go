@@ -287,6 +287,23 @@ func (ic *ContainerEngine) prunePodHelper(ctx context.Context) ([]*entities.PodP
 	return reports, nil
 }
 
+func (ic *ContainerEngine) PodAttach(ctx context.Context, id string, cid string) (*entities.PodAttachReport, error) {
+	ctr, err := ic.Libpod.LookupContainer(cid)
+	if err != nil {
+		return nil, err
+	}
+	pod, err := ic.Libpod.LookupPod(id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ic.Libpod.AttachPod(ctr, pod)
+	if err != nil {
+		return nil, err
+	}
+	return &entities.PodAttachReport{Id: pod.ID()}, nil
+}
+
 func (ic *ContainerEngine) PodCreate(ctx context.Context, specg entities.PodSpec) (*entities.PodCreateReport, error) {
 	pod, err := generate.MakePod(&specg, ic.Libpod)
 	if err != nil {
