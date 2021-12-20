@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/containers/common/libimage"
@@ -131,6 +132,19 @@ func (r *Runtime) Reset(ctx context.Context) error {
 			logrus.Error(prevError)
 		}
 		prevError = err
+	}
+
+	cmd := exec.Command("systemctl")
+	if rootless.IsRootless() {
+		cmd.Args = append(cmd.Args, []string{"--user", "try-restart", "podman.service"}...)
+	} else {
+		cmd.Args = append(cmd.Args, []string{"try-restart", "podman.service"}...)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		return err
 	}
 
 	return prevError
