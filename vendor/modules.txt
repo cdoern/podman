@@ -109,7 +109,7 @@ github.com/containers/buildah/pkg/rusage
 github.com/containers/buildah/pkg/sshagent
 github.com/containers/buildah/pkg/util
 github.com/containers/buildah/util
-# github.com/containers/common v0.47.5-0.20220228211119-9880eb424fde
+# github.com/containers/common v0.47.5-0.20220228211119-9880eb424fde => github.com/cdoern/common v0.38.5-0.20220314001011-d44ccb8ae37d
 ## explicit
 github.com/containers/common/libimage
 github.com/containers/common/libimage/manifests
@@ -571,6 +571,7 @@ github.com/opencontainers/image-spec/specs-go/v1
 ## explicit
 github.com/opencontainers/runc/libcontainer/apparmor
 github.com/opencontainers/runc/libcontainer/cgroups
+github.com/opencontainers/runc/libcontainer/cgroups/fscommon
 github.com/opencontainers/runc/libcontainer/configs
 github.com/opencontainers/runc/libcontainer/devices
 github.com/opencontainers/runc/libcontainer/user
@@ -914,3 +915,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 sigs.k8s.io/yaml
 # github.com/onsi/gomega => github.com/onsi/gomega v1.16.0
+# github.com/containers/common => github.com/cdoern/common v0.38.5-0.20220314001011-d44ccb8ae37d

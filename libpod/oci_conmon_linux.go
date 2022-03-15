@@ -22,6 +22,8 @@ import (
 	"text/template"
 	"time"
 
+	runcconfig "github.com/opencontainers/runc/libcontainer/configs"
+
 	"github.com/containers/common/pkg/cgroups"
 	"github.com/containers/common/pkg/config"
 	conmonConfig "github.com/containers/conmon/runner/config"
@@ -1521,7 +1523,7 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 			}
 		} else {
 			cgroupPath := filepath.Join(ctr.config.CgroupParent, "conmon")
-			control, err := cgroups.New(cgroupPath, &spec.LinuxResources{})
+			control, err := cgroups.New(cgroupPath, &runcconfig.Resources{})
 			if err != nil {
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
 			} else if err := control.AddPid(cmd.Process.Pid); err != nil {

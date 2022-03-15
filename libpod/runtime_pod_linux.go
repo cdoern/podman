@@ -10,13 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	runcconfig "github.com/opencontainers/runc/libcontainer/configs"
+
 	"github.com/containers/common/pkg/cgroups"
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/libpod/events"
 	"github.com/containers/podman/v4/pkg/rootless"
 	"github.com/containers/podman/v4/pkg/specgen"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -233,9 +234,8 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 		}
 
 		// New resource limits
-		resLimits := new(spec.LinuxResources)
-		resLimits.Pids = new(spec.LinuxPids)
-		resLimits.Pids.Limit = 1 // Inhibit forks with very low pids limit
+		resLimits := new(runcconfig.Resources)
+		resLimits.PidsLimit = 1 // Inhibit forks with very low pids limit
 
 		// Don't try if we failed to retrieve the cgroup
 		if err == nil {
