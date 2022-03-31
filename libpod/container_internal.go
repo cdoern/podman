@@ -1927,6 +1927,33 @@ func (c *Container) cleanup(ctx context.Context) error {
 		}
 	}
 
+	if len(c.config.Pod) > 0 {
+		fmt.Println("here")
+		p, err := c.runtime.LookupPod(c.PodID())
+		if err != nil {
+			logrus.Errorf("Error looking up pod: %s", c.PodID())
+			lastError = err
+		}
+		fmt.Println("here")
+
+		allCtrs, err := p.AllContainers()
+		if err != nil {
+			lastError = err
+			logrus.Errorf("Could not get all containers from pod %s", p.ID())
+		}
+		fmt.Println("here")
+		if len(allCtrs) == 2 && allCtrs[0].ID() == c.ID() {
+			fmt.Println("here")
+			_, err = p.Stop(ctx, false)
+			if err != nil {
+				lastError = err
+				logrus.Errorf("Could not stop pod %s", p.ID())
+			}
+			fmt.Println("here")
+		}
+
+	}
+
 	return lastError
 }
 
