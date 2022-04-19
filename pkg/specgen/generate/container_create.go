@@ -8,6 +8,7 @@ import (
 
 	cdi "github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/containers/common/libimage"
+	"github.com/containers/common/pkg/cgroups"
 	"github.com/containers/podman/v4/libpod"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/namespaces"
@@ -183,6 +184,16 @@ func MakeContainer(ctx context.Context, rt *libpod.Runtime, s *specgen.SpecGener
 		if err != nil {
 			return nil, nil, nil, err
 		}
+
+		cgroup2, err := cgroups.IsCgroup2UnifiedMode()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if cgroup2 && s.ResourceLimits.Memory != nil && s.ResourceLimits.Memory.Swappiness != nil { // cgroupsv2 does not support memory swappiness
+			return nil, nil, nil, errors.Wrapf(define.ErrInvalidArg, "cgroupsv2 does not support memory swappiness")
+		}
+
 		if s.ResourceLimits != nil {
 			switch {
 			case s.ResourceLimits.CPU != nil:
