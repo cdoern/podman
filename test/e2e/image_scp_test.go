@@ -52,18 +52,12 @@ var _ = Describe("podman image scp", func() {
 	})
 
 	It("podman image scp bogus image", func() {
-		if IsRemote() {
-			Skip("this test is only for non-remote")
-		}
 		scp := podmanTest.Podman([]string{"image", "scp", "FOOBAR"})
 		scp.WaitWithDefaultTimeout()
 		Expect(scp).To(ExitWithError())
 	})
 
 	It("podman image scp with proper connection", func() {
-		if IsRemote() {
-			Skip("this test is only for non-remote")
-		}
 		cmd := []string{"system", "connection", "add",
 			"--default",
 			"QA",

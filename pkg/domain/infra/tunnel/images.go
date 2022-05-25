@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/types"
-	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/bindings/images"
 	"github.com/containers/podman/v4/pkg/domain/entities"
 	"github.com/containers/podman/v4/pkg/domain/entities/reports"
@@ -121,10 +121,6 @@ func (ir *ImageEngine) Pull(ctx context.Context, rawImage string, opts entities.
 		return nil, err
 	}
 	return &entities.ImagePullReport{Images: pulledImages}, nil
-}
-
-func (ir *ImageEngine) Transfer(ctx context.Context, source entities.ImageScpOptions, dest entities.ImageScpOptions, parentFlags []string) error {
-	return errors.Wrapf(define.ErrNotImplemented, "cannot use the remote client to transfer images between root and rootless storage")
 }
 
 func (ir *ImageEngine) Tag(ctx context.Context, nameOrID string, tags []string, opt entities.ImageTagOptions) error {
@@ -366,4 +362,23 @@ func (ir *ImageEngine) Shutdown(_ context.Context) {
 
 func (ir *ImageEngine) Sign(ctx context.Context, names []string, options entities.SignOptions) (*entities.SignReport, error) {
 	return nil, errors.New("not implemented yet")
+}
+
+func (ir *ImageEngine) Scp(ctx context.Context, args []string, parentFlags []string, quiet bool) error {
+	options := new(images.ScpOptions)
+
+	options.Source = &args[0]
+	if len(args) > 1 {
+		options.Destination = &args[1]
+	}
+	options.Quiet = &quiet
+
+	rep, err := images.Scp(ir.ClientCtx, *options)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Loaded Image(s):", rep.Id)
+
+	return nil
 }

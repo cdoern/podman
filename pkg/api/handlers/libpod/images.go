@@ -21,7 +21,9 @@ import (
 	api "github.com/containers/podman/v4/pkg/api/types"
 	"github.com/containers/podman/v4/pkg/auth"
 	"github.com/containers/podman/v4/pkg/domain/entities"
+	"github.com/containers/podman/v4/pkg/domain/entities/reports"
 	"github.com/containers/podman/v4/pkg/domain/infra/abi"
+	domainUtils "github.com/containers/podman/v4/pkg/domain/utils"
 	"github.com/containers/podman/v4/pkg/errorhandling"
 	"github.com/containers/podman/v4/pkg/util"
 	utils2 "github.com/containers/podman/v4/utils"
@@ -667,4 +669,32 @@ func ImagesRemove(w http.ResponseWriter, r *http.Request) {
 		// 500 - internal error
 		utils.Error(w, http.StatusInternalServerError, errorhandling.JoinErrors(rmErrors))
 	}
+}
+
+func ImageScp(w http.ResponseWriter, r *http.Request) {
+	decoder := r.Context().Value(api.DecoderKey).(*schema.Decoder)
+	query := struct {
+		Source      string `schema:"source"`
+		Destination string `schema:"destination"`
+		Quiet       bool   `schema:"quiet"`
+	}{
+		// This is where you can override the golang default value for one of fields
+	}
+	if err := decoder.Decode(&query, r.URL.Query()); err != nil {
+		utils.Error(w, http.StatusBadRequest, errors.Wrapf(err, "failed to parse parameters for %s", r.URL.String()))
+		return
+	}
+
+	args := []string{query.Source}
+	if len(query.Destination) > 0 {
+		args = append(args, query.Destination)
+	}
+
+	rep, err := domainUtils.ExecuteTransfer(args, []string{}, query.Quiet, true)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	utils.WriteResponse(w, http.StatusOK, &reports.ScpReport{Id: rep.Names[0], Err: err})
 }

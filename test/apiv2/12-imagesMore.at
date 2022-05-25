@@ -65,3 +65,10 @@ t DELETE libpod/images/quay.io/libpod/registry:2.7 200 \
 if [ -z "${GOT_DIGEST}" ] ; then
   exit 1;
 fi
+
+podman pull -q $IMAGE
+
+# test podman image SCP
+podman system connection add --default test ssh://$USER@localhost/run/user/$UID/podman/podman.sock
+# should fail but need to check the output... not sure how to do this
+t POST "libpod/images/scp?source=$IMAGE&destination=QA::" 500 

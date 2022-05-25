@@ -6,13 +6,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"os/exec"
-	"os/user"
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
-	"syscall"
 
 	"github.com/containers/common/libimage"
 	"github.com/containers/common/pkg/config"
@@ -23,13 +19,14 @@ import (
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports"
 	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/podman/v4/libpod/define"
+
+	//"github.com/containers/podman/v4/cmd/podman/registry"
+
 	"github.com/containers/podman/v4/pkg/domain/entities"
 	"github.com/containers/podman/v4/pkg/domain/entities/reports"
 	domainUtils "github.com/containers/podman/v4/pkg/domain/utils"
 	"github.com/containers/podman/v4/pkg/errorhandling"
 	"github.com/containers/podman/v4/pkg/rootless"
-	"github.com/containers/podman/v4/utils"
 	"github.com/containers/storage"
 	dockerRef "github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"
@@ -350,22 +347,6 @@ func (ir *ImageEngine) Push(ctx context.Context, source string, destination stri
 	}
 	return pushError
 }
-
-// Transfer moves images between root and rootless storage so the user specified in the scp call can access and use the image modified by root
-func (ir *ImageEngine) Transfer(ctx context.Context, source entities.ImageScpOptions, dest entities.ImageScpOptions, parentFlags []string) error {
-	if source.User == "" {
-		return errors.Wrapf(define.ErrInvalidArg, "you must define a user when transferring from root to rootless storage")
-	}
-	podman, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if rootless.IsRootless() && (len(dest.User) == 0 || dest.User == "root") { // if we are rootless and do not have a destination user we can just use sudo
-		return transferRootless(source, dest, podman, parentFlags)
-	}
-	return transferRootful(source, dest, podman, parentFlags)
-}
-
 func (ir *ImageEngine) Tag(ctx context.Context, nameOrID string, tags []string, options entities.ImageTagOptions) error {
 	// Allow tagging manifest list instead of resolving instances from manifest
 	lookupOptions := &libimage.LookupImageOptions{ManifestList: true}
@@ -694,6 +675,11 @@ func (ir *ImageEngine) Sign(ctx context.Context, names []string, options entitie
 	return nil, nil
 }
 
+func (ir *ImageEngine) Scp(ctx context.Context, args []string, parentFlags []string, quiet bool) error {
+	_, err := domainUtils.ExecuteTransfer(args, parentFlags, quiet, false)
+	return err
+}
+
 func getSigFilename(sigStoreDirPath string) (string, error) {
 	sigFileSuffix := 1
 	sigFiles, err := ioutil.ReadDir(sigStoreDirPath)
@@ -741,158 +727,4 @@ func putSignature(manifestBlob []byte, mech signature.SigningMechanism, sigStore
 		return err
 	}
 	return nil
-}
-
-// TransferRootless creates new podman processes using exec.Command and sudo, transferring images between the given source and destination users
-func transferRootless(source entities.ImageScpOptions, dest entities.ImageScpOptions, podman string, parentFlags []string) error {
-	var cmdSave *exec.Cmd
-	saveCommand, loadCommand := parentFlags, parentFlags
-	saveCommand = append(saveCommand, []string{"save"}...)
-	loadCommand = append(loadCommand, []string{"load"}...)
-	if source.Quiet {
-		saveCommand = append(saveCommand, "-q")
-		loadCommand = append(loadCommand, "-q")
-	}
-
-	saveCommand = append(saveCommand, []string{"--output", source.File, source.Image}...)
-
-	loadCommand = append(loadCommand, []string{"--input", dest.File}...)
-
-	if source.User == "root" {
-		cmdSave = exec.Command("sudo", podman)
-	} else {
-		cmdSave = exec.Command(podman)
-	}
-	cmdSave = utils.CreateSCPCommand(cmdSave, saveCommand)
-	logrus.Debugf("Executing save command: %q", cmdSave)
-	err := cmdSave.Run()
-	if err != nil {
-		return err
-	}
-
-	var cmdLoad *exec.Cmd
-	if source.User != "root" {
-		cmdLoad = exec.Command("sudo", podman)
-	} else {
-		cmdLoad = exec.Command(podman)
-	}
-	cmdLoad = utils.CreateSCPCommand(cmdLoad, loadCommand)
-	logrus.Debugf("Executing load command: %q", cmdLoad)
-	if len(dest.Tag) > 0 {
-		return utils.ScpTag(cmdLoad, podman, dest)
-	}
-	return cmdLoad.Run()
-}
-
-// transferRootful creates new podman processes using exec.Command and a new uid/gid alongside a cleared environment
-func transferRootful(source entities.ImageScpOptions, dest entities.ImageScpOptions, podman string, parentFlags []string) error {
-	basicCommand := make([]string, 0, len(parentFlags)+1)
-	basicCommand = append(basicCommand, podman)
-	basicCommand = append(basicCommand, parentFlags...)
-
-	saveCommand := make([]string, 0, len(basicCommand)+4)
-	saveCommand = append(saveCommand, basicCommand...)
-	saveCommand = append(saveCommand, "save")
-
-	loadCommand := make([]string, 0, len(basicCommand)+3)
-	loadCommand = append(loadCommand, basicCommand...)
-	loadCommand = append(loadCommand, "load")
-	if source.Quiet {
-		saveCommand = append(saveCommand, "-q")
-		loadCommand = append(loadCommand, "-q")
-	}
-	saveCommand = append(saveCommand, []string{"--output", source.File, source.Image}...)
-	loadCommand = append(loadCommand, []string{"--input", dest.File}...)
-
-	// if executing using sudo or transferring between two users, the TransferRootless approach will not work, the new process needs to be set up
-	// with the proper uid and gid as well as environmental variables.
-	var uSave *user.User
-	var uLoad *user.User
-	var err error
-	source.User = strings.Split(source.User, ":")[0] // split in case provided with uid:gid
-	dest.User = strings.Split(dest.User, ":")[0]
-	uSave, err = lookupUser(source.User)
-	if err != nil {
-		return err
-	}
-	switch {
-	case dest.User != "": // if we are given a destination user, check that first
-		uLoad, err = lookupUser(dest.User)
-		if err != nil {
-			return err
-		}
-	case uSave.Name != "root": // else if we have no destination user, and source is not root that means we should be root
-		uLoad, err = user.LookupId("0")
-		if err != nil {
-			return err
-		}
-	default: // else if we have no dest user, and source user IS root, we want to be the default user.
-		uString := os.Getenv("SUDO_USER")
-		if uString == "" {
-			return errors.New("$SUDO_USER must be defined to find the default rootless user")
-		}
-		uLoad, err = user.Lookup(uString)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = execPodman(uSave, saveCommand, false)
-	if err != nil {
-		return err
-	}
-	out, err := execPodman(uLoad, loadCommand, (len(dest.Tag) > 0))
-	if err != nil {
-		return err
-	}
-	if out != nil {
-		image := utils.ExtractImage(out)
-		_, err := execPodman(uLoad, []string{podman, "tag", image, dest.Tag}, false)
-		return err
-	}
-	return nil
-}
-
-func lookupUser(u string) (*user.User, error) {
-	if u, err := user.LookupId(u); err == nil {
-		return u, nil
-	}
-	return user.Lookup(u)
-}
-
-func execPodman(execUser *user.User, command []string, needToTag bool) ([]byte, error) {
-	cmdLogin, err := utils.LoginUser(execUser.Username)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		_ = cmdLogin.Process.Kill()
-		_ = cmdLogin.Wait()
-	}()
-
-	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "TERM=" + os.Getenv("TERM")}
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	uid, err := strconv.ParseInt(execUser.Uid, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	gid, err := strconv.ParseInt(execUser.Gid, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{
-			Uid:         uint32(uid),
-			Gid:         uint32(gid),
-			Groups:      nil,
-			NoSetGroups: false,
-		},
-	}
-	if needToTag {
-		cmd.Stdout = nil
-		return cmd.Output()
-	}
-	return nil, cmd.Run()
 }
