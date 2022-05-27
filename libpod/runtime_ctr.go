@@ -555,11 +555,23 @@ func (r *Runtime) setupContainer(ctx context.Context, ctr *Container) (_ *Contai
 		pod.lock.Lock()
 		defer pod.lock.Unlock()
 
-		if err := r.state.AddContainerToPod(pod, ctr); err != nil {
+		err = r.state.AddContainerToPod(pod, ctr)
+		for err != nil {
+			err = checkForCollision(ctr, err)
+			if err != nil {
+				return nil, err
+			}
+			err = r.state.AddContainerToPod(pod, ctr)
+		}
+	}
+
+	err = r.state.AddContainer(ctr)
+	for err != nil {
+		err = checkForCollision(ctr, err)
+		if err != nil {
 			return nil, err
 		}
-	} else if err := r.state.AddContainer(ctr); err != nil {
-		return nil, err
+		err = r.state.AddContainer(ctr)
 	}
 	ctr.newContainerEvent(events.Create)
 	return ctr, nil
@@ -1280,4 +1292,18 @@ func (r *Runtime) StorageContainers() ([]storage.Container, error) {
 
 func (r *Runtime) IsBuildahContainer(id string) (bool, error) {
 	return buildah.IsContainer(id, r.store)
+}
+
+func checkForCollision(ctr *Container, err error) error {
+	if strings.Contains(err.Error(), "is in use") {
+		logrus.Warn("name provided is already taken, randomly generating a new name")
+		name, err := ctr.runtime.generateName()
+		if err != nil {
+			return err
+		}
+		ctr.config.Name = name
+	} else {
+		return err
+	}
+	return nil
 }
