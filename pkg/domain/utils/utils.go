@@ -17,10 +17,10 @@ import (
 	scpD "github.com/dtylman/scp"
 
 	"github.com/containers/common/pkg/config"
+	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/domain/entities"
 	"github.com/containers/podman/v4/pkg/terminal"
-	"github.com/docker/distribution/reference"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -433,6 +433,7 @@ func ParseImageSCPArg(arg string) (*entities.ImageScpOptions, []string, error) {
 		}
 		cliConnections = append(cliConnections, arg)
 	case strings.Contains(arg, "::"):
+
 		location, err = ValidateImagePortion(location, arg)
 		if err != nil {
 			return nil, nil, err
@@ -448,11 +449,13 @@ func ParseImageSCPArg(arg string) (*entities.ImageScpOptions, []string, error) {
 // validateImagePortion is a helper function to validate the image name in an SCP argument
 func ValidateImagePortion(location entities.ImageScpOptions, arg string) (entities.ImageScpOptions, error) {
 	if RemoteArgLength(arg, 1) > 0 {
-		err := ValidateImageName(strings.Split(arg, "::")[1])
-		if err != nil {
-			return location, err
-		}
-		location.Image = strings.Split(arg, "::")[1] // this will get checked/set again once we validate connections
+		before := strings.Split(arg, "::")[1]
+		name := ValidateImageName(before)
+		if before != name {
+			location.Image = name
+		} else {
+			location.Image = before
+		} // this will get checked/set again once we validate connections
 	}
 	return location, nil
 }
@@ -474,13 +477,16 @@ func ValidateSCPArgs(locations []*entities.ImageScpOptions) error {
 
 // validateImageName makes sure that the image given is valid and no injections are occurring
 // we simply use this for error checking, bot setting the image
-func ValidateImageName(input string) error {
+func ValidateImageName(input string) string {
 	// ParseNormalizedNamed transforms a shortname image into its
 	// full name reference so busybox => docker.io/library/busybox
 	// we want to keep our shortnames, so only return an error if
 	// we cannot parse what the user has given us
-	_, err := reference.ParseNormalizedNamed(input)
-	return err
+
+	if ref, err := alltransports.ParseImageName(input); err == nil {
+		input = ref.Transport().Name()
+	}
+	return input
 }
 
 // remoteArgLength is a helper function to simplify the extracting of host argument data
