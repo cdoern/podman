@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (ic *ContainerEngine) SecretCreate(ctx context.Context, name string, reader io.Reader, options entities.SecretCreateOptions) (*entities.SecretCreateReport, error) {
+func (ic *ContainerEngine) SecretCreate(ctx context.Context, name string, reader io.Reader, options entities.SecretCreateOptions, path string) (*entities.SecretCreateReport, error) {
 	data, _ := ioutil.ReadAll(reader)
 	secretsPath := ic.Libpod.GetSecretsStorageDir()
 	manager, err := ic.Libpod.SecretsManager()
@@ -38,6 +38,12 @@ func (ic *ContainerEngine) SecretCreate(ctx context.Context, name string, reader
 	if options.Driver == "file" {
 		if _, ok := options.DriverOpts["path"]; !ok {
 			options.DriverOpts["path"] = filepath.Join(secretsPath, "filedriver")
+		}
+	}
+
+	if options.Driver == "pass" {
+		if _, ok := options.DriverOpts["path"]; !ok {
+			options.DriverOpts["path"] = path
 		}
 	}
 

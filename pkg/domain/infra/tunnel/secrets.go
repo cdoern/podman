@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (ic *ContainerEngine) SecretCreate(ctx context.Context, name string, reader io.Reader, options entities.SecretCreateOptions) (*entities.SecretCreateReport, error) {
+func (ic *ContainerEngine) SecretCreate(ctx context.Context, name string, reader io.Reader, options entities.SecretCreateOptions, path string) (*entities.SecretCreateReport, error) {
 	opts := new(secrets.CreateOptions).
 		WithDriver(options.Driver).
 		WithDriverOpts(options.DriverOpts).

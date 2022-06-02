@@ -87,7 +87,7 @@ func create(cmd *cobra.Command, args []string) error {
 		reader = file
 	}
 
-	report, err := registry.ContainerEngine().SecretCreate(context.Background(), name, reader, createOpts)
+	report, err := registry.ContainerEngine().SecretCreate(context.Background(), name, reader, createOpts, path)
 	if err != nil {
 		return err
 	}
