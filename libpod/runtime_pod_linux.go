@@ -17,7 +17,7 @@ import (
 	"github.com/containers/podman/v4/libpod/events"
 	"github.com/containers/podman/v4/pkg/rootless"
 	"github.com/containers/podman/v4/pkg/specgen"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
+	runcconfig "github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -95,7 +95,7 @@ func (r *Runtime) NewPod(ctx context.Context, p specgen.PodSpecGenerator, option
 			// If we are set to use pod cgroups, set the cgroup parent that
 			// all containers in the pod will share
 			if pod.config.UsePodCgroup {
-				cgroupPath, err := systemdSliceFromPath(pod.config.CgroupParent, fmt.Sprintf("libpod_pod_%s", pod.ID()))
+				cgroupPath, err := systemdSliceFromPath(pod.config.CgroupParent, fmt.Sprintf("libpod_pod_%s", pod.ID()), p.InfraContainerSpec.ResourceLimits)
 				if err != nil {
 					return nil, errors.Wrapf(err, "unable to create pod cgroup for pod %s", pod.ID())
 				}
@@ -239,9 +239,8 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 		}
 
 		// New resource limits
-		resLimits := new(spec.LinuxResources)
-		resLimits.Pids = new(spec.LinuxPids)
-		resLimits.Pids.Limit = 1 // Inhibit forks with very low pids limit
+		resLimits := new(runcconfig.Resources)
+		resLimits.PidsLimit = 1 // Inhibit forks with very low pids limit
 
 		// Don't try if we failed to retrieve the cgroup
 		if err == nil {
@@ -321,7 +320,7 @@ func (r *Runtime) removePod(ctx context.Context, p *Pod, removeCtrs, force bool,
 
 		switch p.runtime.config.Engine.CgroupManager {
 		case config.SystemdCgroupsManager:
-			if err := deleteSystemdCgroup(p.state.CgroupPath); err != nil {
+			if err := deleteSystemdCgroup(p.state.CgroupPath, p.ResourceLim()); err != nil {
 				if removalErr == nil {
 					removalErr = errors.Wrapf(err, "error removing pod %s cgroup", p.ID())
 				} else {

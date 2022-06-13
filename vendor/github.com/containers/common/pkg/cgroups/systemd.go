@@ -8,9 +8,10 @@ import (
 
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
-func systemdCreate(path string, c *systemdDbus.Conn) error {
+func systemdCreate(resources *configs.Resources, path string, c *systemdDbus.Conn) error {
 	slice, name := filepath.Split(path)
 	slice = strings.TrimSuffix(slice, "/")
 
@@ -29,7 +30,41 @@ func systemdCreate(path string, c *systemdDbus.Conn) error {
 		if i == 0 {
 			pMap["Delegate"] = true
 		}
+
 		for k, v := range pMap {
+			p := systemdDbus.Property{
+				Name:  k,
+				Value: dbus.MakeVariant(v),
+			}
+			properties = append(properties, p)
+		}
+
+		uMap, sMap, sAMap, iMap := resourcesToProps(resources)
+		for k, v := range uMap {
+			p := systemdDbus.Property{
+				Name:  k,
+				Value: dbus.MakeVariant(v),
+			}
+			properties = append(properties, p)
+		}
+
+		for k, v := range sMap {
+			p := systemdDbus.Property{
+				Name:  k,
+				Value: dbus.MakeVariant(v),
+			}
+			properties = append(properties, p)
+		}
+
+		for k, v := range sAMap {
+			p := systemdDbus.Property{
+				Name:  k,
+				Value: dbus.MakeVariant(v),
+			}
+			properties = append(properties, p)
+		}
+
+		for k, v := range iMap {
 			p := systemdDbus.Property{
 				Name:  k,
 				Value: dbus.MakeVariant(v),
@@ -77,4 +112,60 @@ func systemdDestroyConn(path string, c *systemdDbus.Conn) error {
 	}
 	<-ch
 	return nil
+}
+
+func resourcesToProps(res *configs.Resources) (map[string]uint64, map[string]string, map[string][]byte, map[string]int64) {
+	bMap := make(map[string][]byte)
+	// this array is not used but will be once more resource limits are added
+	sMap := make(map[string]string)
+	iMap := make(map[string]int64)
+	uMap := make(map[string]uint64)
+
+	//CPU
+	if res.CpuPeriod != 0 {
+		uMap["CPUQuotaPeriodUSec"] = res.CpuPeriod
+	}
+	if res.CpuQuota != 0 {
+		uMap["CPUQuotaPerSecUSec"] = uint64(res.CpuQuota)
+	}
+
+	// BROKEN due to permissions in rootless
+	if res.CpusetCpus != "" {
+		bits := []byte(res.CpusetCpus)
+		bMap["AllowedCPUs"] = bits
+	}
+	if res.CpusetMems != "" {
+		bits := []byte(res.CpusetMems)
+		bMap["AllowedMemoryNodes"] = bits
+	}
+
+	//Mem
+	if res.Memory != 0 {
+		iMap["MemoryMax"] = res.Memory
+	}
+	if res.MemorySwap != 0 {
+		iMap["MemorySwapMax"] = res.MemorySwap
+	}
+
+	//Blkio
+	if res.BlkioWeight > 0 {
+		uMap["BlockIOWeight"] = uint64(res.BlkioWeight)
+	}
+
+	// WAITING FOR https://github.com/opencontainers/runc/pull/3508
+	/*
+		if res.BlkioWeightDevice != nil {
+			for _, entry := range res.BlkioWeightDevice {
+				// space separated string
+
+			}
+		}
+		if res.BlkioThrottleReadBpsDevice != nil {
+			// space separated string
+		}
+		if res.BlkioThrottleWriteBpsDevice != nil {
+			// space separated string
+		}*/
+
+	return uMap, sMap, bMap, iMap
 }

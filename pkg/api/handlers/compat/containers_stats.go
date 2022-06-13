@@ -12,6 +12,7 @@ import (
 	api "github.com/containers/podman/v4/pkg/api/types"
 	docker "github.com/docker/docker/api/types"
 	"github.com/gorilla/schema"
+	runccgroups "github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -150,11 +151,11 @@ streamLabel: // A label to flatten the scope
 				Read:    time.Now(),
 				PreRead: preRead,
 				PidsStats: docker.PidsStats{
-					Current: cgroupStat.Pids.Current,
+					Current: cgroupStat.PidsStats.Current,
 					Limit:   0,
 				},
 				BlkioStats: docker.BlkioStats{
-					IoServiceBytesRecursive: toBlkioStatEntry(cgroupStat.Blkio.IoServiceBytesRecursive),
+					IoServiceBytesRecursive: toBlkioStatEntry(cgroupStat.BlkioStats.IoServiceBytesRecursive),
 					IoServicedRecursive:     nil,
 					IoQueuedRecursive:       nil,
 					IoServiceTimeRecursive:  nil,
@@ -165,14 +166,14 @@ streamLabel: // A label to flatten the scope
 				},
 				CPUStats: CPUStats{
 					CPUUsage: docker.CPUUsage{
-						TotalUsage:        cgroupStat.CPU.Usage.Total,
-						PercpuUsage:       cgroupStat.CPU.Usage.PerCPU,
-						UsageInKernelmode: cgroupStat.CPU.Usage.Kernel,
-						UsageInUsermode:   cgroupStat.CPU.Usage.Total - cgroupStat.CPU.Usage.Kernel,
+						TotalUsage:        cgroupStat.CpuStats.CpuUsage.TotalUsage,
+						PercpuUsage:       cgroupStat.CpuStats.CpuUsage.PercpuUsage,
+						UsageInKernelmode: cgroupStat.CpuStats.CpuUsage.UsageInKernelmode,
+						UsageInUsermode:   cgroupStat.CpuStats.CpuUsage.TotalUsage - cgroupStat.CpuStats.CpuUsage.UsageInKernelmode,
 					},
 					CPU:         stats.CPU,
 					SystemUsage: systemUsage,
-					OnlineCPUs:  uint32(len(cgroupStat.CPU.Usage.PerCPU)),
+					OnlineCPUs:  uint32(len(cgroupStat.CpuStats.CpuUsage.PercpuUsage)),
 					ThrottlingData: docker.ThrottlingData{
 						Periods:          0,
 						ThrottledPeriods: 0,
@@ -181,11 +182,11 @@ streamLabel: // A label to flatten the scope
 				},
 				PreCPUStats: preCPUStats,
 				MemoryStats: docker.MemoryStats{
-					Usage:             cgroupStat.Memory.Usage.Usage,
-					MaxUsage:          cgroupStat.Memory.Usage.Limit,
+					Usage:             cgroupStat.MemoryStats.Usage.Usage,
+					MaxUsage:          cgroupStat.MemoryStats.Usage.Limit,
 					Stats:             nil,
 					Failcnt:           0,
-					Limit:             cgroupStat.Memory.Usage.Limit,
+					Limit:             cgroupStat.MemoryStats.Usage.Limit,
 					Commit:            0,
 					CommitPeak:        0,
 					PrivateWorkingSet: 0,
@@ -222,7 +223,7 @@ streamLabel: // A label to flatten the scope
 	}
 }
 
-func toBlkioStatEntry(entries []cgroups.BlkIOEntry) []docker.BlkioStatEntry {
+func toBlkioStatEntry(entries []runccgroups.BlkioStatEntry) []docker.BlkioStatEntry {
 	results := make([]docker.BlkioStatEntry, len(entries))
 	for i, e := range entries {
 		bits, err := json.Marshal(e)

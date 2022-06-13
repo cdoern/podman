@@ -14,10 +14,10 @@ require (
 	github.com/containers/buildah v1.26.1-0.20220607182634-005447be07ee
 	github.com/containers/common v0.48.1-0.20220528105338-54c8092c69a1
 	github.com/containers/conmon v2.0.20+incompatible
-	github.com/containers/image/v5 v5.21.2-0.20220520105616-e594853d6471
-	github.com/containers/ocicrypt v1.1.4-0.20220428134531-566b808bdf6f
+	github.com/containers/image/v5 v5.21.2-0.20220607134551-a4c340b1a21f
+	github.com/containers/ocicrypt v1.1.5
 	github.com/containers/psgo v1.7.2
-	github.com/containers/storage v1.41.1-0.20220517121726-5019cd55275c
+	github.com/containers/storage v1.41.1-0.20220607143333-8951d0153bf6
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/coreos/stream-metadata-go v0.0.0-20210225230131-70edb9eb47b3
 	github.com/cyphar/filepath-securejoin v0.2.3
@@ -73,3 +73,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.1-0.20220607072441-a7a45d7d2721
+
+replace github.com/containers/common => github.com/cdoern/common v0.38.5-0.20220616173625-481fd26f842b

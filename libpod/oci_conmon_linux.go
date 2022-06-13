@@ -23,6 +23,9 @@ import (
 	"text/template"
 	"time"
 
+	runcconfig "github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/devices"
+
 	"github.com/containers/common/pkg/cgroups"
 	"github.com/containers/common/pkg/config"
 	conmonConfig "github.com/containers/conmon/runner/config"
@@ -1451,9 +1454,15 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 		// TODO: This should be a switch - we are not guaranteed that
 		// there are only 2 valid cgroup managers
 		cgroupParent := ctr.CgroupParent()
+		cgroupPath := filepath.Join(ctr.config.CgroupParent, "conmon")
+		Resource := ctr.Spec().Linux.Resources
+		cgroupResources, err := Getlimits(Resource)
+		if err != nil {
+			logrus.StandardLogger().Log(logLevel, "Could not get ctr resources")
+		}
 		if ctr.CgroupManager() == config.SystemdCgroupsManager {
-			unitName := createUnitName("libpod-conmon", ctr.ID())
 
+			unitName := createUnitName("libpod-conmon", ctr.ID())
 			realCgroupParent := cgroupParent
 			splitParent := strings.Split(cgroupParent, "/")
 			if strings.HasSuffix(cgroupParent, ".slice") && len(splitParent) > 1 {
@@ -1465,8 +1474,7 @@ func (r *ConmonOCIRuntime) moveConmonToCgroupAndSignal(ctr *Container, cmd *exec
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to systemd sandbox cgroup: %v", err)
 			}
 		} else {
-			cgroupPath := filepath.Join(ctr.config.CgroupParent, "conmon")
-			control, err := cgroups.New(cgroupPath, &spec.LinuxResources{})
+			control, err := cgroups.New(cgroupPath, &cgroupResources)
 			if err != nil {
 				logrus.StandardLogger().Logf(logLevel, "Failed to add conmon to cgroupfs sandbox cgroup: %v", err)
 			} else if err := control.AddPid(cmd.Process.Pid); err != nil {
@@ -1747,4 +1755,143 @@ func httpAttachNonTerminalCopy(container *net.UnixConn, http *bufio.ReadWriter, 
 			return err
 		}
 	}
+}
+
+func Getlimits(Resource *spec.LinuxResources) (runcconfig.Resources, error) {
+	final := &runcconfig.Resources{}
+	devs := []*devices.Rule{}
+	//blkioWeight := []*runcconfig.WeightDevice{}
+	for _, entry := range Resource.Devices {
+		if entry.Major == nil || entry.Minor == nil {
+			continue
+		}
+		runeType := 'a'
+		switch entry.Type {
+		case "b":
+			runeType = 'b'
+		case "c":
+			runeType = 'c'
+		}
+
+		devs = append(devs, &devices.Rule{
+			Type:        devices.Type(runeType),
+			Major:       *entry.Major,
+			Minor:       *entry.Minor,
+			Permissions: devices.Permissions(entry.Access),
+			Allow:       entry.Allow,
+		})
+	}
+	final.Devices = devs
+
+	/*	io := runcconfig.blockIODevice{}
+		for _, entry := range Resource.BlockIO.WeightDevice {
+			blkioWeight = append(blkioWeight, &runcconfig.WeightDevice{
+				Weight:     *entry.Weight,
+				LeafWeight: *entry.LeafWeight,
+			})
+		}*/
+
+	pageLimits := []*runcconfig.HugepageLimit{}
+	for _, entry := range Resource.HugepageLimits {
+		pageLimits = append(pageLimits, &runcconfig.HugepageLimit{
+			Pagesize: entry.Pagesize,
+			Limit:    entry.Limit,
+		})
+	}
+	final.HugetlbLimit = pageLimits
+
+	netPriorities := []*runcconfig.IfPrioMap{}
+	if Resource.Network != nil {
+		for _, entry := range Resource.Network.Priorities {
+			netPriorities = append(netPriorities, &runcconfig.IfPrioMap{
+				Interface: entry.Name,
+				Priority:  int64(entry.Priority),
+			})
+		}
+	}
+	final.NetPrioIfpriomap = netPriorities
+	rdma := make(map[string]runcconfig.LinuxRdma)
+	for name, entry := range Resource.Rdma {
+		rdma[name] = runcconfig.LinuxRdma{HcaHandles: entry.HcaHandles, HcaObjects: entry.HcaObjects}
+	}
+	/*
+		final = &runcconfig.Resources{
+			Memory:                       *Resource.Memory.Limit,
+			Devices:                      devs,
+			MemoryReservation:            *Resource.Memory.Reservation,
+			MemorySwap:                   *Resource.Memory.Swap,
+			CpuShares:                    *Resource.CPU.Shares,
+			CpuQuota:                     *Resource.CPU.Quota,
+			CpuPeriod:                    *Resource.CPU.Period,
+			CpuRtRuntime:                 *Resource.CPU.RealtimeRuntime,
+			CpuRtPeriod:                  *Resource.CPU.RealtimePeriod,
+			CpusetCpus:                   Resource.CPU.Cpus,
+			CpusetMems:                   Resource.CPU.Mems,
+			PidsLimit:                    Resource.Pids.Limit,
+			BlkioLeafWeight:              *Resource.BlockIO.LeafWeight,
+			BlkioWeightDevice:            nil,
+			BlkioThrottleReadBpsDevice:   nil,
+			BlkioThrottleWriteBpsDevice:  nil,
+			BlkioThrottleReadIOPSDevice:  nil,
+			BlkioThrottleWriteIOPSDevice: nil,
+			Freezer:                      runcconfig.FreezerState(""),
+			HugetlbLimit:                 pageLimits,
+			OomKillDisable:               *Resource.Memory.DisableOOMKiller,
+			MemorySwappiness:             Resource.Memory.Swappiness,
+			NetPrioIfpriomap:             netPriorities,
+			NetClsClassid:                *Resource.Network.ClassID,
+			Rdma:                         rdma,
+			CpuWeight:                    0,
+			Unified:                      Resource.Unified,
+			SkipDevices:                  false,
+			SkipFreezeOnSet:              true,
+		}*/
+
+	if Resource.Memory != nil {
+		if Resource.Memory.Limit != nil {
+			final.Memory = *Resource.Memory.Limit
+		}
+		if Resource.Memory.Reservation != nil {
+			final.MemoryReservation = *Resource.Memory.Reservation
+		}
+		if Resource.Memory.Swap != nil {
+			final.MemorySwap = *Resource.Memory.Swap
+		}
+		if Resource.Memory.Swappiness != nil {
+			final.MemorySwappiness = Resource.Memory.Swappiness
+		}
+	}
+	fmt.Println(Resource.CPU)
+	if Resource.CPU != nil {
+		if Resource.CPU.Period != nil {
+			final.CpuPeriod = *Resource.CPU.Period
+		}
+		if Resource.CPU.Quota != nil {
+			final.CpuQuota = *Resource.CPU.Quota
+		}
+		if Resource.CPU.RealtimePeriod != nil {
+			final.CpuRtPeriod = *Resource.CPU.RealtimePeriod
+		}
+		if Resource.CPU.RealtimeRuntime != nil {
+			final.CpuRtRuntime = *Resource.CPU.RealtimeRuntime
+		}
+		if Resource.CPU.Shares != nil {
+			final.CpuShares = *Resource.CPU.Shares
+		}
+		final.CpusetCpus = Resource.CPU.Cpus
+		final.CpusetMems = Resource.CPU.Mems
+	}
+
+	if Resource.BlockIO != nil {
+
+	}
+
+	if Resource.Network != nil {
+		if Resource.Network.ClassID != nil {
+			final.NetClsClassid = *Resource.Network.ClassID
+		}
+	}
+	final.Unified = Resource.Unified
+	fmt.Println("filled out:", final)
+	return *final, nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/containers/common/pkg/cgroups"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/rootless"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -20,7 +21,7 @@ import (
 // systemdSliceFromPath makes a new systemd slice under the given parent with
 // the given name.
 // The parent must be a slice. The name must NOT include ".slice"
-func systemdSliceFromPath(parent, name string) (string, error) {
+func systemdSliceFromPath(parent, name string, resources *spec.LinuxResources) (string, error) {
 	cgroupPath, err := assembleSystemdCgroupName(parent, name)
 	if err != nil {
 		return "", err
@@ -28,7 +29,7 @@ func systemdSliceFromPath(parent, name string) (string, error) {
 
 	logrus.Debugf("Created cgroup path %s for parent %s and name %s", cgroupPath, parent, name)
 
-	if err := makeSystemdCgroup(cgroupPath); err != nil {
+	if err := makeSystemdCgroup(cgroupPath, name, resources); err != nil {
 		return "", errors.Wrapf(err, "error creating cgroup %s", cgroupPath)
 	}
 
@@ -45,8 +46,13 @@ func getDefaultSystemdCgroup() string {
 }
 
 // makeSystemdCgroup creates a systemd Cgroup at the given location.
-func makeSystemdCgroup(path string) error {
-	controller, err := cgroups.NewSystemd(getDefaultSystemdCgroup())
+func makeSystemdCgroup(path, name string, resources *spec.LinuxResources) error {
+	res, err := Getlimits(resources)
+	if err != nil {
+		return err
+	}
+	fmt.Println(res)
+	controller, err := cgroups.NewSystemd(getDefaultSystemdCgroup(), &res)
 	if err != nil {
 		return err
 	}
@@ -54,12 +60,22 @@ func makeSystemdCgroup(path string) error {
 	if rootless.IsRootless() {
 		return controller.CreateSystemdUserUnit(path, rootless.GetRootlessUID())
 	}
-	return controller.CreateSystemdUnit(path)
+	err = controller.CreateSystemdUnit(path)
+	if err != nil {
+		return nil
+	}
+	return nil
+	//r
+	//return controller.Update(&res)
 }
 
 // deleteSystemdCgroup deletes the systemd cgroup at the given location
-func deleteSystemdCgroup(path string) error {
-	controller, err := cgroups.NewSystemd(getDefaultSystemdCgroup())
+func deleteSystemdCgroup(path string, resources *spec.LinuxResources) error {
+	res, err := Getlimits(resources)
+	if err != nil {
+		return err
+	}
+	controller, err := cgroups.NewSystemd(getDefaultSystemdCgroup(), &res)
 	if err != nil {
 		return err
 	}
