@@ -374,15 +374,15 @@ func createPodIfNecessary(cmd *cobra.Command, s *specgen.SpecGenerator, netOpts 
 		}
 	}
 	createOptions := entities.PodCreateOptions{
-		Name:          podName,
-		Infra:         true,
-		Net:           netOpts,
+		Name:  podName,
+		Infra: true,
+		//Net:           netOpts,
 		CreateCommand: os.Args,
 		Hostname:      s.ContainerBasicConfig.Hostname,
-		Cpus:          cliVals.CPUS,
-		CpusetCpus:    cliVals.CPUSetCPUs,
-		Pid:           cliVals.PID,
-		Userns:        uns,
+		//	Cpus:          cliVals.CPUS,
+		//	CpusetCpus:    cliVals.CPUSetCPUs,
+		Pid: cliVals.PID,
+		//Userns:        uns,
 	}
 	// Unset config values we passed to the pod to prevent them being used twice for the container and pod.
 	s.ContainerBasicConfig.Hostname = ""
@@ -404,8 +404,9 @@ func createPodIfNecessary(cmd *cobra.Command, s *specgen.SpecGenerator, netOpts 
 	if err != nil {
 		return err
 	}
+	//infraOpts.CPUS
 	podGen.InfraContainerSpec = specgen.NewSpecGenerator("", false)
-	podGen.InfraContainerSpec.NetworkOptions = podGen.NetworkOptions
+	//podGen.InfraContainerSpec.NetworkOptions = podGen.NetworkOptions
 	err = specgenutil.FillOutSpecGen(podGen.InfraContainerSpec, &infraOpts, []string{})
 	if err != nil {
 		return err

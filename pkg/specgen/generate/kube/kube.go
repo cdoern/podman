@@ -33,11 +33,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, podYAML *v1.PodTemplateSpec) (entities.PodCreateOptions, error) {
-	p.Net = &entities.NetOptions{NoHosts: p.Net.NoHosts}
+func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, i entities.ContainerCreateOptions, podYAML *v1.PodTemplateSpec) (entities.PodCreateOptions, error) {
+	i.Net = &entities.NetOptions{NoHosts: i.Net.NoHosts}
 
 	p.Name = podName
-	p.Labels = podYAML.ObjectMeta.Labels
+	// again labels dont match
+	//	i.Labels = podYAML.ObjectMeta.Labels
 	// Kube pods must share {ipc, net, uts} by default
 	p.Share = append(p.Share, "ipc")
 	p.Share = append(p.Share, "net")
@@ -52,10 +53,10 @@ func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, 
 		p.Hostname = podName
 	}
 	if podYAML.Spec.HostNetwork {
-		p.Net.Network = specgen.Namespace{NSMode: "host"}
+		i.Net.Network = specgen.Namespace{NSMode: "host"}
 	}
 	if podYAML.Spec.HostAliases != nil {
-		if p.Net.NoHosts {
+		if i.Net.NoHosts {
 			return p, errors.New("HostAliases in yaml file will not work with --no-hosts")
 		}
 		hosts := make([]string, 0, len(podYAML.Spec.HostAliases))
@@ -64,10 +65,10 @@ func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, 
 				hosts = append(hosts, host+":"+hostAlias.IP)
 			}
 		}
-		p.Net.AddHosts = hosts
+		i.Net.AddHosts = hosts
 	}
 	podPorts := getPodPorts(podYAML.Spec.Containers)
-	p.Net.PublishPorts = podPorts
+	i.Net.PublishPorts = podPorts
 
 	if dnsConfig := podYAML.Spec.DNSConfig; dnsConfig != nil {
 		// name servers
@@ -76,11 +77,11 @@ func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, 
 			for _, server := range dnsServers {
 				servers = append(servers, net.ParseIP(server))
 			}
-			p.Net.DNSServers = servers
+			i.Net.DNSServers = servers
 		}
 		// search domains
 		if domains := dnsConfig.Searches; len(domains) > 0 {
-			p.Net.DNSSearch = domains
+			i.Net.DNSSearch = domains
 		}
 		// dns options
 		if options := dnsConfig.Options; len(options) > 0 {
@@ -92,7 +93,7 @@ func ToPodOpt(ctx context.Context, podName string, p entities.PodCreateOptions, 
 				}
 				dnsOptions = append(dnsOptions, d)
 			}
-			p.Net.DNSOptions = dnsOptions
+			i.Net.DNSOptions = dnsOptions
 		}
 	}
 	return p, nil

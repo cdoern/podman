@@ -35,52 +35,52 @@ func (p *PodSpecGenerator) Validate() error {
 	}
 
 	// PodNetworkConfig
-	if err := validateNetNS(&p.NetNS); err != nil {
+	if err := validateNetNS(&p.InfraContainerSpec.NetNS); err != nil {
 		return err
 	}
 	if p.NoInfra {
-		if p.NetNS.NSMode != Default && p.NetNS.NSMode != "" {
+		if p.InfraContainerSpec.NetNS.NSMode != Default && p.InfraContainerSpec.NetNS.NSMode != "" {
 			return errors.New("NoInfra and network modes cannot be used together")
 		}
 		// Note that networks might be set when --ip or --mac was set
 		// so we need to check that no networks are set without the infra
-		if len(p.Networks) > 0 {
+		if len(p.InfraContainerSpec.Networks) > 0 {
 			return errors.New("cannot set networks options without infra container")
 		}
-		if len(p.DNSOption) > 0 {
+		if len(p.InfraContainerSpec.DNSOptions) > 0 {
 			return exclusivePodOptions("NoInfra", "DNSOption")
 		}
-		if len(p.DNSSearch) > 0 {
+		if len(p.InfraContainerSpec.DNSSearch) > 0 {
 			return exclusivePodOptions("NoInfo", "DNSSearch")
 		}
-		if len(p.DNSServer) > 0 {
+		if len(p.InfraContainerSpec.DNSServers) > 0 {
 			return exclusivePodOptions("NoInfra", "DNSServer")
 		}
-		if len(p.HostAdd) > 0 {
+		if len(p.InfraContainerSpec.HostAdd) > 0 {
 			return exclusivePodOptions("NoInfra", "HostAdd")
 		}
-		if p.NoManageResolvConf {
+		if p.InfraContainerSpec.UseImageResolvConf {
 			return exclusivePodOptions("NoInfra", "NoManageResolvConf")
 		}
 	}
-	if p.NetNS.NSMode != "" && p.NetNS.NSMode != Bridge && p.NetNS.NSMode != Slirp && p.NetNS.NSMode != Default {
-		if len(p.PortMappings) > 0 {
+	if p.InfraContainerSpec.NetNS.NSMode != "" && p.InfraContainerSpec.NetNS.NSMode != Bridge && p.InfraContainerSpec.NetNS.NSMode != Slirp && p.InfraContainerSpec.NetNS.NSMode != Default {
+		if len(p.InfraContainerSpec.PortMappings) > 0 {
 			return errors.New("PortMappings can only be used with Bridge or slirp4netns networking")
 		}
 	}
 
-	if p.NoManageResolvConf {
-		if len(p.DNSServer) > 0 {
+	if p.InfraContainerSpec.UseImageResolvConf {
+		if len(p.InfraContainerSpec.DNSServers) > 0 {
 			return exclusivePodOptions("NoManageResolvConf", "DNSServer")
 		}
-		if len(p.DNSSearch) > 0 {
+		if len(p.InfraContainerSpec.DNSSearch) > 0 {
 			return exclusivePodOptions("NoManageResolvConf", "DNSSearch")
 		}
-		if len(p.DNSOption) > 0 {
+		if len(p.InfraContainerSpec.DNSOptions) > 0 {
 			return exclusivePodOptions("NoManageResolvConf", "DNSOption")
 		}
 	}
-	if p.NoManageHosts && len(p.HostAdd) > 0 {
+	if p.InfraContainerSpec.UseImageHosts && len(p.InfraContainerSpec.HostAdd) > 0 {
 		return exclusivePodOptions("NoManageHosts", "HostAdd")
 	}
 

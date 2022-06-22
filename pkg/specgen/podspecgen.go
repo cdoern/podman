@@ -1,13 +1,5 @@
 package specgen
 
-import (
-	"net"
-
-	"github.com/containers/common/libnetwork/types"
-	storageTypes "github.com/containers/storage/types"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
-)
-
 // PodBasicConfig contains basic configuration options for pods.
 type PodBasicConfig struct {
 	// Name is the name of the pod.
@@ -83,6 +75,7 @@ type PodBasicConfig struct {
 	Sysctl map[string]string `json:"sysctl,omitempty"`
 }
 
+/*
 // PodNetworkConfig contains networking configuration for a pod.
 type PodNetworkConfig struct {
 	// NetNS is the configuration to use for the infra container's network
@@ -188,7 +181,9 @@ type PodStorageConfig struct {
 	// Optional.
 	ShmSize *int64 `json:"shm_size,omitempty"`
 }
+*/
 
+/*
 // PodCgroupConfig contains configuration options about a pod's cgroups.
 // This will be expanded in future updates to pods.
 type PodCgroupConfig struct {
@@ -198,29 +193,30 @@ type PodCgroupConfig struct {
 	// Optional.
 	CgroupParent string `json:"cgroup_parent,omitempty"`
 }
-
+*/
 // PodSpecGenerator describes options to create a pod
 // swagger:model PodSpecGenerator
 type PodSpecGenerator struct {
 	PodBasicConfig
-	PodNetworkConfig
-	PodCgroupConfig
-	PodResourceConfig
-	PodStorageConfig
-	PodSecurityConfig
-	InfraContainerSpec *SpecGenerator `json:"-"`
+	//	PodNetworkConfig
+	//	PodCgroupConfig
+	//PodResourceConfig
+	//	PodStorageConfig
+	//PodSecurityConfig
+	InfraContainerSpec *SpecGenerator `json:"infra_container_spec"`
 
 	// The ID of the pod's service container.
 	ServiceContainerID string `json:"serviceContainerID,omitempty"`
 }
 
+/*
 type PodResourceConfig struct {
 	// ResourceLimits contains linux specific CPU data for the pod
-	ResourceLimits *spec.LinuxResources `json:"resource_limits,omitempty"`
+	ResourceLimits *spec.LinuxResources `json:"-"`
 	// CPU period of the cpuset, determined by --cpus
-	CPUPeriod uint64 `json:"cpu_period,omitempty"`
+	CPUPeriod uint64 `json:"-"`
 	// CPU quota of the cpuset, determined by --cpus
-	CPUQuota int64 `json:"cpu_quota,omitempty"`
+	CPUQuota int64 `json:"-"`
 	// ThrottleReadBpsDevice contains the rate at which the devices in the pod can be read from/accessed
 	ThrottleReadBpsDevice map[string]spec.LinuxThrottleDevice `json:"throttleReadBpsDevice,omitempty"`
 }
@@ -232,7 +228,7 @@ type PodSecurityConfig struct {
 	// Required if UserNS is private.
 	IDMappings *storageTypes.IDMappingOptions `json:"idmappings,omitempty"`
 }
-
+*/
 // NewPodSpecGenerator creates a new pod spec
 func NewPodSpecGenerator() *PodSpecGenerator {
 	return &PodSpecGenerator{}

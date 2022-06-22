@@ -16,7 +16,6 @@ import (
 	"github.com/containers/podman/v4/pkg/domain/infra/abi"
 	"github.com/containers/podman/v4/pkg/specgen"
 	"github.com/containers/podman/v4/pkg/specgen/generate"
-	"github.com/containers/podman/v4/pkg/specgenutil"
 	"github.com/containers/podman/v4/pkg/util"
 	"github.com/gorilla/schema"
 	"github.com/pkg/errors"
@@ -41,7 +40,7 @@ func PodCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !psg.NoInfra {
-		infraOptions := entities.NewInfraContainerCreateOptions() // options for pulling the image and FillOutSpec
+		/*infraOptions := entities.NewInfraContainerCreateOptions() // options for pulling the image and FillOutSpec
 		infraOptions.Net = &entities.NetOptions{}
 		infraOptions.Devices = psg.Devices
 		infraOptions.SecurityOpt = psg.SecurityOpt
@@ -70,7 +69,10 @@ func PodCreate(w http.ResponseWriter, r *http.Request) {
 		psg.InfraContainerSpec.ContainerCreateCommand = psg.InfraCommand
 		psg.InfraContainerSpec.Image = psg.InfraImage
 		psg.InfraContainerSpec.RawImageName = psg.InfraImage
+		*/
 	}
+	//	utils.Error(w, 500, errors.New(strconv.FormatInt(*psg.InfraContainerSpec.ResourceLimits.CPU.Quota, 10)))
+	//return
 	podSpecComplete := entities.PodSpec{PodSpecGen: psg}
 	pod, err := generate.MakePod(&podSpecComplete, runtime)
 	if err != nil {

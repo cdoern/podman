@@ -280,10 +280,12 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 
 	podOpt := entities.PodCreateOptions{
 		Infra:      true,
-		Net:        &entities.NetOptions{NoHosts: options.NoHosts},
 		ExitPolicy: string(config.PodExitPolicyStop),
 	}
-	podOpt, err = kube.ToPodOpt(ctx, podName, podOpt, podYAML)
+	infraOpt := entities.ContainerCreateOptions{
+		Net: &entities.NetOptions{NoHosts: options.NoHosts},
+	}
+	podOpt, err = kube.ToPodOpt(ctx, podName, podOpt, infraOpt, podYAML)
 	if err != nil {
 		return nil, err
 	}
@@ -298,9 +300,9 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 			return nil, errors.Errorf("invalid value passed to --network: bridge or host networking must be configured in YAML")
 		}
 
-		podOpt.Net.Network = ns
-		podOpt.Net.Networks = networks
-		podOpt.Net.NetworkOptions = netOpts
+		infraOpt.Net.Network = ns
+		infraOpt.Net.Networks = networks
+		infraOpt.Net.NetworkOptions = netOpts
 	}
 
 	if options.Userns == "" {
@@ -308,37 +310,39 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 	}
 
 	// Validate the userns modes supported.
-	podOpt.Userns, err = specgen.ParseUserNamespace(options.Userns)
-	if err != nil {
-		return nil, err
-	}
+	infraOpt.UserNS = options.Userns
+
+	//, err = specgen.ParseUserNamespace(options.Userns)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	// FIXME This is very hard to support properly with a good ux
 	if len(options.StaticIPs) > *ipIndex {
-		if !podOpt.Net.Network.IsBridge() {
+		if !infraOpt.Net.Network.IsBridge() {
 			return nil, errors.Wrap(define.ErrInvalidArg, "static ip addresses can only be set when the network mode is bridge")
 		}
-		if len(podOpt.Net.Networks) != 1 {
+		if len(infraOpt.Net.Networks) != 1 {
 			return nil, errors.Wrap(define.ErrInvalidArg, "cannot set static ip addresses for more than network, use netname:ip=<ip> syntax to specify ips for more than network")
 		}
-		for name, netOpts := range podOpt.Net.Networks {
+		for name, netOpts := range infraOpt.Net.Networks {
 			netOpts.StaticIPs = append(netOpts.StaticIPs, options.StaticIPs[*ipIndex])
-			podOpt.Net.Networks[name] = netOpts
+			infraOpt.Net.Networks[name] = netOpts
 		}
 	} else if len(options.StaticIPs) > 0 {
 		// only warn if the user has set at least one ip
 		logrus.Warn("No more static ips left using a random one")
 	}
 	if len(options.StaticMACs) > *ipIndex {
-		if !podOpt.Net.Network.IsBridge() {
+		if !infraOpt.Net.Network.IsBridge() {
 			return nil, errors.Wrap(define.ErrInvalidArg, "static mac address can only be set when the network mode is bridge")
 		}
-		if len(podOpt.Net.Networks) != 1 {
+		if len(infraOpt.Net.Networks) != 1 {
 			return nil, errors.Wrap(define.ErrInvalidArg, "cannot set static mac address for more than network, use netname:mac=<mac> syntax to specify mac for more than network")
 		}
-		for name, netOpts := range podOpt.Net.Networks {
+		for name, netOpts := range infraOpt.Net.Networks {
 			netOpts.StaticMAC = nettypes.HardwareAddr(options.StaticMACs[*ipIndex])
-			podOpt.Net.Networks[name] = netOpts
+			infraOpt.Net.Networks[name] = netOpts
 		}
 	} else if len(options.StaticIPs) > 0 {
 		// only warn if the user has set at least one mac
@@ -355,6 +359,15 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 	if err != nil {
 		return nil, err
 	}
+
+	infraSpec := specgen.NewSpecGenerator("", true)
+	err = specgenutil.FillOutSpecGen(infraSpec, &infraOpt, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	p.InfraContainerSpec = infraSpec
+
 	podSpec := entities.PodSpec{PodSpecGen: *p}
 
 	configMapIndex := make(map[string]struct{})
@@ -441,19 +454,19 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 
 	if podOpt.Infra {
 		infraImage := util.DefaultContainerConfig().Engine.InfraImage
-		infraOptions := entities.NewInfraContainerCreateOptions()
-		infraOptions.Hostname = podSpec.PodSpecGen.PodBasicConfig.Hostname
-		infraOptions.UserNS = options.Userns
+		//	infraOptions := entities.NewInfraContainerCreateOptions()
+		//	infraOptions.Hostname = podSpec.PodSpecGen.PodBasicConfig.Hostname
+		//infraOptions.UserNS = options.Userns
 		podSpec.PodSpecGen.InfraImage = infraImage
 		podSpec.PodSpecGen.NoInfra = false
-		podSpec.PodSpecGen.InfraContainerSpec = specgen.NewSpecGenerator(infraImage, false)
-		podSpec.PodSpecGen.InfraContainerSpec.NetworkOptions = p.NetworkOptions
+		//	podSpec.PodSpecGen.InfraContainerSpec = specgen.NewSpecGenerator(infraImage, false)
+		//podSpec.PodSpecGen.InfraContainerSpec.NetworkOptions = p.NetworkOptions
 		podSpec.PodSpecGen.InfraContainerSpec.SdNotifyMode = define.SdNotifyModeIgnore
 
-		err = specgenutil.FillOutSpecGen(podSpec.PodSpecGen.InfraContainerSpec, &infraOptions, []string{})
-		if err != nil {
-			return nil, err
-		}
+		//err = specgenutil.FillOutSpecGen(podSpec.PodSpecGen.InfraContainerSpec, &infraOptions, []string{})
+		//if err != nil {
+		return nil, err
+		//}
 	}
 
 	if serviceContainer != nil {
@@ -517,7 +530,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 			Labels:             labels,
 			LogDriver:          options.LogDriver,
 			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
+			NetNSIsHost:        infraSpec.NetNS.IsHost(),
 			PodID:              pod.ID(),
 			PodInfraID:         podInfraID,
 			PodName:            podName,
@@ -568,7 +581,7 @@ func (ic *ContainerEngine) playKubePod(ctx context.Context, podName string, podY
 			Labels:             labels,
 			LogDriver:          options.LogDriver,
 			LogOptions:         options.LogOptions,
-			NetNSIsHost:        p.NetNS.IsHost(),
+			NetNSIsHost:        infraSpec.NetNS.IsHost(),
 			PodID:              pod.ID(),
 			PodInfraID:         podInfraID,
 			PodName:            podName,

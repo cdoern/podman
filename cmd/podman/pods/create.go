@@ -5,16 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"runtime"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/containers/common/pkg/completion"
-	"github.com/containers/common/pkg/sysinfo"
 	"github.com/containers/podman/v4/cmd/podman/common"
 	"github.com/containers/podman/v4/cmd/podman/containers"
-	"github.com/containers/podman/v4/cmd/podman/parse"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/domain/entities"
@@ -22,7 +17,6 @@ import (
 	"github.com/containers/podman/v4/pkg/specgen"
 	"github.com/containers/podman/v4/pkg/specgenutil"
 	"github.com/containers/podman/v4/pkg/util"
-	"github.com/docker/docker/pkg/parsers"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -125,7 +119,7 @@ func create(cmd *cobra.Command, args []string) error {
 	}
 	labelFile = infraOptions.LabelFile
 	labels = infraOptions.Label
-	createOptions.Labels, err = parse.GetAllLabels(labelFile, labels)
+	//	createOptions.Labels, err = parse.GetAllLabels(labelFile, labels)
 	if err != nil {
 		return errors.Wrapf(err, "unable to process labels")
 	}
@@ -139,7 +133,7 @@ func create(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("cannot specify --no-hosts without an infra container")
 		}
 		flags := cmd.Flags()
-		createOptions.Net, err = common.NetFlagsToNetOptions(nil, *flags)
+		infraOptions.Net, err = common.NetFlagsToNetOptions(nil, *flags)
 		if err != nil {
 			return err
 		}
@@ -202,7 +196,7 @@ func create(cmd *cobra.Command, args []string) error {
 		defer errorhandling.SyncQuiet(podIDFD)
 	}
 
-	if len(createOptions.Net.PublishPorts) > 0 {
+	if len(infraOptions.Net.PublishPorts) > 0 {
 		if !createOptions.Infra {
 			return errors.Errorf("you must have an infra container to publish port bindings to the host")
 		}
@@ -215,50 +209,51 @@ func create(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
-	numCPU := sysinfo.NumCPU()
-	if numCPU == 0 {
-		numCPU = runtime.NumCPU()
-	}
-	if createOptions.Cpus > float64(numCPU) {
-		createOptions.Cpus = float64(numCPU)
-	}
-	copy := infraOptions.CPUSetCPUs
-	cpuSet := infraOptions.CPUS
-	if cpuSet == 0 {
-		cpuSet = float64(sysinfo.NumCPU())
-	}
-	ret, err := parsers.ParseUintList(copy)
-	copy = ""
-	if err != nil {
-		return errors.Wrapf(err, "could not parse list")
-	}
-	var vals []int
-	for ind, val := range ret {
-		if val {
-			vals = append(vals, ind)
+	/*
+		numCPU := sysinfo.NumCPU()
+		if numCPU == 0 {
+			numCPU = runtime.NumCPU()
 		}
-	}
-	sort.Ints(vals)
-	for ind, core := range vals {
-		switch {
-		case core > int(cpuSet):
-			if copy == "" {
-				copy = "0-" + strconv.Itoa(int(cpuSet))
-				infraOptions.CPUSetCPUs = copy
-				break
-			} else {
-				infraOptions.CPUSetCPUs = copy
-				break
+		if infraOptions.CPUS > float64(numCPU) {
+			infraOptions.CPUS = float64(numCPU)
+		}
+		copy := infraOptions.CPUSetCPUs
+		cpuSet := infraOptions.CPUS
+		if cpuSet == 0 {
+			cpuSet = float64(sysinfo.NumCPU())
+		}
+		ret, err := parsers.ParseUintList(copy)
+		copy = ""
+		if err != nil {
+			return errors.Wrapf(err, "could not parse list")
+		}
+		var vals []int
+		for ind, val := range ret {
+			if val {
+				vals = append(vals, ind)
 			}
-		case ind != 0:
-			copy += "," + strconv.Itoa(core)
-		default:
-			copy = "" + strconv.Itoa(core)
 		}
-	}
-	createOptions.Cpus = infraOptions.CPUS
-	createOptions.CpusetCpus = infraOptions.CPUSetCPUs
+		sort.Ints(vals)
+		for ind, core := range vals {
+			switch {
+			case core > int(cpuSet):
+				if copy == "" {
+					copy = "0-" + strconv.Itoa(int(cpuSet))
+					infraOptions.CPUSetCPUs = copy
+					break
+				} else {
+					infraOptions.CPUSetCPUs = copy
+					break
+				}
+			case ind != 0:
+				copy += "," + strconv.Itoa(core)
+			default:
+				copy = "" + strconv.Itoa(core)
+			}
+		}
+		createOptions.Cpus = infraOptions.CPUS
+		createOptions.CpusetCpus = infraOptions.CPUSetCPUs
+	*/
 	podSpec := specgen.NewPodSpecGenerator()
 	podSpec, err = entities.ToPodSpecGen(*podSpec, &createOptions)
 	if err != nil {
@@ -272,25 +267,29 @@ func create(cmd *cobra.Command, args []string) error {
 		}
 		podSpec.InfraContainerSpec = specgen.NewSpecGenerator(imageName, false)
 		podSpec.InfraContainerSpec.RawImageName = rawImageName
-		podSpec.InfraContainerSpec.NetworkOptions = podSpec.NetworkOptions
+		//	podSpec.InfraContainerSpec.NetworkOptions = podSpec.NetworkOptions
 		err = specgenutil.FillOutSpecGen(podSpec.InfraContainerSpec, &infraOptions, []string{})
 		if err != nil {
 			return err
 		}
-		podSpec.Volumes = podSpec.InfraContainerSpec.Volumes
-		podSpec.ImageVolumes = podSpec.InfraContainerSpec.ImageVolumes
-		podSpec.OverlayVolumes = podSpec.InfraContainerSpec.OverlayVolumes
-		podSpec.Mounts = podSpec.InfraContainerSpec.Mounts
 
-		// Marshall and Unmarshal the spec in order to map similar entities
-		wrapped, err := json.Marshal(podSpec.InfraContainerSpec)
-		if err != nil {
-			return err
-		}
-		err = json.Unmarshal(wrapped, podSpec)
-		if err != nil {
-			return err
-		}
+		/*
+				podSpec.Volumes = podSpec.InfraContainerSpec.Volumes
+				podSpec.ImageVolumes = podSpec.InfraContainerSpec.ImageVolumes
+				podSpec.OverlayVolumes = podSpec.InfraContainerSpec.OverlayVolumes
+				podSpec.Mounts = podSpec.InfraContainerSpec.Mounts
+
+
+			// Marshall and Unmarshal the spec in order to map similar entities
+			wrapped, err := json.Marshal(podSpec.InfraContainerSpec)
+			if err != nil {
+				return err
+			}
+			err = json.Unmarshal(wrapped, podSpec)
+			if err != nil {
+				return err
+			}
+		*/
 		podSpec.Name = podName
 	}
 	PodSpec := entities.PodSpec{PodSpecGen: *podSpec}

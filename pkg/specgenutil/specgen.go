@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getCPULimits(c *entities.ContainerCreateOptions) *specs.LinuxCPU {
+func GetCPULimits(c *entities.ContainerCreateOptions) *specs.LinuxCPU {
 	cpu := &specs.LinuxCPU{}
 	hasLimits := false
 
@@ -524,7 +524,7 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	}
 
 	if s.ResourceLimits.CPU == nil || (c.CPUPeriod != 0 || c.CPUQuota != 0 || c.CPURTPeriod != 0 || c.CPURTRuntime != 0 || c.CPUS != 0 || len(c.CPUSetCPUs) != 0 || len(c.CPUSetMems) != 0 || c.CPUShares != 0) {
-		s.ResourceLimits.CPU = getCPULimits(c)
+		s.ResourceLimits.CPU = GetCPULimits(c)
 	}
 
 	unifieds := make(map[string]string)

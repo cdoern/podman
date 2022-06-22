@@ -8,8 +8,6 @@ import (
 	commonFlag "github.com/containers/common/pkg/flag"
 	"github.com/containers/podman/v4/libpod/define"
 	"github.com/containers/podman/v4/pkg/specgen"
-	"github.com/containers/podman/v4/pkg/util"
-	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 type PodKillOptions struct {
@@ -118,30 +116,30 @@ type PodSpec struct {
 // The JSON tags below are made to match the respective field in ContainerCreateOptions for the purpose of mapping.
 // swagger:model PodCreateOptions
 type PodCreateOptions struct {
-	CgroupParent       string            `json:"cgroup_parent,omitempty"`
-	CreateCommand      []string          `json:"create_command,omitempty"`
-	Devices            []string          `json:"devices,omitempty"`
-	DeviceReadBPs      []string          `json:"device_read_bps,omitempty"`
-	ExitPolicy         string            `json:"exit_policy,omitempty"`
-	Hostname           string            `json:"hostname,omitempty"`
-	Infra              bool              `json:"infra,omitempty"`
-	InfraImage         string            `json:"infra_image,omitempty"`
-	InfraName          string            `json:"container_name,omitempty"`
-	InfraCommand       *string           `json:"container_command,omitempty"`
-	InfraConmonPidFile string            `json:"container_conmon_pidfile,omitempty"`
-	Labels             map[string]string `json:"labels,omitempty"`
-	Name               string            `json:"name,omitempty"`
-	Net                *NetOptions       `json:"net,omitempty"`
-	Share              []string          `json:"share,omitempty"`
-	ShareParent        *bool             `json:"share_parent,omitempty"`
-	Pid                string            `json:"pid,omitempty"`
-	Cpus               float64           `json:"cpus,omitempty"`
-	CpusetCpus         string            `json:"cpuset_cpus,omitempty"`
-	Userns             specgen.Namespace `json:"-"`
-	Volume             []string          `json:"volume,omitempty"`
-	VolumesFrom        []string          `json:"volumes_from,omitempty"`
-	SecurityOpt        []string          `json:"security_opt,omitempty"`
-	Sysctl             []string          `json:"sysctl,omitempty"`
+	CgroupParent  string   `json:"cgroup_parent,omitempty"`
+	CreateCommand []string `json:"create_command,omitempty"`
+	//Devices            []string          `json:"devices,omitempty"`
+	//DeviceReadBPs      []string          `json:"device_read_bps,omitempty"`
+	ExitPolicy         string  `json:"exit_policy,omitempty"`
+	Hostname           string  `json:"hostname,omitempty"`
+	Infra              bool    `json:"infra,omitempty"`
+	InfraImage         string  `json:"infra_image,omitempty"`
+	InfraName          string  `json:"container_name,omitempty"`
+	InfraCommand       *string `json:"container_command,omitempty"`
+	InfraConmonPidFile string  `json:"container_conmon_pidfile,omitempty"`
+	//Labels             map[string]string `json:"labels,omitempty"`
+	Name string `json:"name,omitempty"`
+	//	Net                *NetOptions       `json:"net,omitempty"`
+	Share       []string `json:"share,omitempty"`
+	ShareParent *bool    `json:"share_parent,omitempty"`
+	Pid         string   `json:"pid,omitempty"`
+	//	Cpus               float64           `json:"cpus,omitempty"`
+	//	CpusetCpus         string            `json:"cpuset_cpus,omitempty"`
+	//	Userns             specgen.Namespace `json:"-"`
+	//	Volume             []string          `json:"volume,omitempty"`
+	//	VolumesFrom        []string          `json:"volumes_from,omitempty"`
+	//	SecurityOpt        []string          `json:"security_opt,omitempty"`
+	//	Sysctl             []string          `json:"sysctl,omitempty"`
 }
 
 // PodLogsOptions describes the options to extract pod logs.
@@ -304,6 +302,7 @@ type PodCloneReport struct {
 	Id string //nolint:revive,stylecheck
 }
 
+/*
 func (p *PodCreateOptions) CPULimits() *specs.LinuxCPU {
 	cpu := &specs.LinuxCPU{}
 	hasLimits := false
@@ -323,6 +322,7 @@ func (p *PodCreateOptions) CPULimits() *specs.LinuxCPU {
 	}
 	return cpu
 }
+*/
 
 func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.PodSpecGenerator, error) {
 	// Basic Config
@@ -335,9 +335,9 @@ func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.Pod
 	s.Pid = out
 	s.Hostname = p.Hostname
 	s.ExitPolicy = p.ExitPolicy
-	s.Labels = p.Labels
-	s.Devices = p.Devices
-	s.SecurityOpt = p.SecurityOpt
+	//	s.Labels = p.Labels
+	//	s.Devices = p.Devices
+	//	s.InfraContainerSpec.ContainerSecurityConfig.SelinuxOpts = p.SecurityOpt
 	s.NoInfra = !p.Infra
 	if p.InfraCommand != nil && len(*p.InfraCommand) > 0 {
 		s.InfraCommand = strings.Split(*p.InfraCommand, " ")
@@ -349,51 +349,51 @@ func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.Pod
 	s.SharedNamespaces = p.Share
 	s.ShareParent = p.ShareParent
 	s.PodCreateCommand = p.CreateCommand
-	s.VolumesFrom = p.VolumesFrom
+	//s.InfraContainerSpec.VolumesFrom = p.VolumesFrom
 
 	// Networking config
-
-	if p.Net != nil {
-		s.NetNS = p.Net.Network
-		s.PortMappings = p.Net.PublishPorts
-		s.Networks = p.Net.Networks
-		s.NetworkOptions = p.Net.NetworkOptions
-		if p.Net.UseImageResolvConf {
-			s.NoManageResolvConf = true
+	/*
+		if p.Net != nil {
+			s.NetNS = p.Net.Network
+			s.PortMappings = p.Net.PublishPorts
+			s.Networks = p.Net.Networks
+			s.NetworkOptions = p.Net.NetworkOptions
+			if p.Net.UseImageResolvConf {
+				s.NoManageResolvConf = true
+			}
+			s.DNSServer = p.Net.DNSServers
+			s.DNSSearch = p.Net.DNSSearch
+			s.DNSOption = p.Net.DNSOptions
+			s.NoManageHosts = p.Net.NoHosts
+			s.HostAdd = p.Net.AddHosts
 		}
-		s.DNSServer = p.Net.DNSServers
-		s.DNSSearch = p.Net.DNSSearch
-		s.DNSOption = p.Net.DNSOptions
-		s.NoManageHosts = p.Net.NoHosts
-		s.HostAdd = p.Net.AddHosts
-	}
 
-	// Cgroup
-	s.CgroupParent = p.CgroupParent
+		// Cgroup
+		s.CgroupParent = p.CgroupParent
 
-	// Resource config
-	cpuDat := p.CPULimits()
-	if s.ResourceLimits == nil {
-		s.ResourceLimits = &specs.LinuxResources{}
-		s.ResourceLimits.CPU = &specs.LinuxCPU{}
-	}
-	if cpuDat != nil {
-		s.ResourceLimits.CPU = cpuDat
-		if p.Cpus != 0 {
-			s.CPUPeriod = *cpuDat.Period
-			s.CPUQuota = *cpuDat.Quota
+		// Resource config
+		cpuDat := specgenutil.GetCPULimits(c)
+		if s.ResourceLimits == nil {
+			s.ResourceLimits = &specs.LinuxResources{}
+			s.ResourceLimits.CPU = &specs.LinuxCPU{}
 		}
-	}
-	s.Userns = p.Userns
-	sysctl := map[string]string{}
-	if ctl := p.Sysctl; len(ctl) > 0 {
-		sysctl, err = util.ValidateSysctls(ctl)
-		if err != nil {
-			return nil, err
+		if cpuDat != nil {
+			s.ResourceLimits.CPU = cpuDat
+			if p.Cpus != 0 {
+				s.CPUPeriod = *cpuDat.Period
+				s.CPUQuota = *cpuDat.Quota
+			}
 		}
-	}
-	s.Sysctl = sysctl
-
+		s.Userns = p.Userns
+		sysctl := map[string]string{}
+		if ctl := p.Sysctl; len(ctl) > 0 {
+			sysctl, err = util.ValidateSysctls(ctl)
+			if err != nil {
+				return nil, err
+			}
+		}
+		s.Sysctl = sysctl
+	*/
 	return &s, nil
 }
 
