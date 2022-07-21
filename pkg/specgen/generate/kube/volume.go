@@ -188,7 +188,6 @@ func VolumeFromSource(volumeSource v1.VolumeSource, configMaps []v1.ConfigMap) (
 // Create a map of volume name to KubeVolume
 func InitializeVolumes(specVolumes []v1.Volume, configMaps []v1.ConfigMap) (map[string]*KubeVolume, error) {
 	volumes := make(map[string]*KubeVolume)
-
 	for _, specVolume := range specVolumes {
 		volume, err := VolumeFromSource(specVolume.VolumeSource, configMaps)
 		if err != nil {

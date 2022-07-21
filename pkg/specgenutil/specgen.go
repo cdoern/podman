@@ -685,6 +685,7 @@ func FillOutSpecGen(s *specgen.SpecGenerator, c *entities.ContainerCreateOptions
 	if err != nil {
 		return err
 	}
+
 	if len(s.Mounts) == 0 || len(c.Mount) != 0 {
 		s.Mounts = mounts
 	}

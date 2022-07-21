@@ -23,6 +23,8 @@ type NamedVolume struct {
 	Dest string
 	// Options are options that the named volume will be mounted with.
 	Options []string
+	// SubPath
+	SubPath string
 }
 
 // OverlayVolume holds information about a overlay volume that will be mounted into

@@ -174,6 +174,11 @@ func finalizeMounts(ctx context.Context, s *specgen.SpecGenerator, rt *libpod.Ru
 	for _, mount := range baseMounts {
 		if mount.Type == define.TypeBind {
 			absSrc, err := filepath.Abs(mount.Source)
+			// need to eval path here
+			if _, err := os.Stat(absSrc); err != nil {
+				// we are given a path that DNE, lets take a look
+
+			}
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("error getting absolute path of %s: %w", mount.Source, err)
 			}
@@ -315,6 +320,7 @@ func getVolumesFrom(volumesFrom []string, runtime *libpod.Runtime) (map[string]s
 		// part of the container, as some spec mounts are.
 		namedVolumes := ctr.NamedVolumes()
 		for _, namedVol := range namedVolumes {
+			fmt.Println("NVOL: ", namedVol)
 			if _, exists := userVolumes[namedVol.Dest]; exists {
 				userVolumes[namedVol.Dest] = true
 			}
@@ -347,6 +353,7 @@ func getVolumesFrom(volumesFrom []string, runtime *libpod.Runtime) (map[string]s
 		}
 	}
 
+	fmt.Println(finalMounts)
 	return finalMounts, finalNamedVolumes, nil
 }
 

@@ -1414,6 +1414,7 @@ func WithNamedVolumes(volumes []*ContainerNamedVolume) CtrCreateOption {
 				Name:    vol.Name,
 				Dest:    vol.Dest,
 				Options: mountOpts,
+				SubPath: vol.SubPath,
 			})
 		}
 

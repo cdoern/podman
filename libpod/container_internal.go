@@ -1468,6 +1468,7 @@ func (c *Container) restartWithTimeout(ctx context.Context, timeout uint) (retEr
 // TODO: Can we use this for export? Copying SHM into the export might not be
 // good
 func (c *Container) mountStorage() (_ string, deferredErr error) {
+	fmt.Println("mounting storage")
 	var err error
 	// Container already mounted, nothing to do
 	if c.state.Mounted {
@@ -1600,6 +1601,7 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 	}
 
 	// Request a mount of all named volumes
+
 	for _, v := range c.config.NamedVolumes {
 		vol, err := c.mountNamedVolume(v, mountPoint)
 		if err != nil {
@@ -1625,6 +1627,8 @@ func (c *Container) mountStorage() (_ string, deferredErr error) {
 // Does not verify that the name volume given is actually present in container
 // config.
 // Returns the volume that was mounted.
+
+// use the subPATH HERE!!!
 func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string) (*Volume, error) {
 	logrus.Debugf("Going to mount named volume %s", v.Name)
 	vol, err := c.runtime.state.Volume(v.Name)
@@ -1647,9 +1651,8 @@ func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string)
 		return nil, err
 	}
 	_, hasNoCopy := vol.config.Options["nocopy"]
-	if vol.state.NeedsCopyUp && !cutil.StringInSlice("nocopy", v.Options) && !hasNoCopy {
+	if vol.state.NeedsCopyUp && !cutil.StringInSlice("nocopy", v.Options) && !hasNoCopy && len(v.SubPath) == 0 {
 		logrus.Debugf("Copying up contents from container %s to volume %s", c.ID(), vol.Name())
-
 		srcDir, err := securejoin.SecureJoin(mountpoint, v.Dest)
 		if err != nil {
 			return nil, fmt.Errorf("error calculating destination path to copy up container %s volume %s: %w", c.ID(), vol.Name(), err)
@@ -1722,7 +1725,7 @@ func (c *Container) mountNamedVolume(v *ContainerNamedVolume, mountpoint string)
 		// Copy, volume side: stream what we've written to the pipe, into
 		// the volume.
 		copyOpts := copier.PutOptions{}
-		if err := copier.Put(volMount, "", copyOpts, reader); err != nil {
+		if err := copier.Put(volMount, v.SubPath, copyOpts, reader); err != nil {
 			err2 := <-errChan
 			if err2 != nil {
 				logrus.Errorf("Streaming contents of container %s directory for volume copy-up: %v", c.ID(), err2)

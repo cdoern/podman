@@ -241,6 +241,8 @@ type ContainerNamedVolume struct {
 	Dest string `json:"dest"`
 	// Options are fstab style mount options
 	Options []string `json:"options,omitempty"`
+	// SubPath
+	SubPath string
 }
 
 // ContainerOverlayVolume is a overlay volume that will be mounted into the

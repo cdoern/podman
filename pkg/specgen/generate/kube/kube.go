@@ -345,11 +345,18 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 			continue
 		}
 
+		// submount parsing needs to go here
+
 		dest, options, err := parseMountPath(volume.MountPath, volume.ReadOnly, volume.MountPropagation)
 		if err != nil {
 			return nil, err
 		}
 
+		if len(volume.SubPath) > 0 {
+			//volumeSource.Type = KubeVolumeTypeBindMount
+			//volumeSource.Source = filepath.Join(volumeSource.Source, "_data", volume.SubPath)
+		}
+		fmt.Println(volumeSource.Items)
 		volume.MountPath = dest
 		switch volumeSource.Type {
 		case KubeVolumeTypeBindMount:
@@ -368,11 +375,14 @@ func ToSpecGen(ctx context.Context, opts *CtrSpecGenOptions) (*specgen.SpecGener
 				Options:     options,
 			}
 			s.Mounts = append(s.Mounts, mount)
+			fmt.Println("looking better")
 		case KubeVolumeTypeNamed:
+			fmt.Println("here")
 			namedVolume := specgen.NamedVolume{
 				Dest:    volume.MountPath,
 				Name:    volumeSource.Source,
 				Options: options,
+				SubPath: volume.SubPath,
 			}
 			s.Volumes = append(s.Volumes, &namedVolume)
 		case KubeVolumeTypeConfigMap:
