@@ -75,7 +75,7 @@ filter __podman-remote_escapeStringWithSpecialChars {
 
     __podman-remote_debug "Calling $RequestComp"
     # First disable ActiveHelp which is not supported for Powershell
-    $env:PODMAN_REMOTE_ACTIVE_HELP=0
+    ${env:PODMAN_REMOTE_ACTIVE_HELP}=0
 
     #call the command store the output in $out and redirect stderr and stdout to null
     # $Out is an array contains each line per element
